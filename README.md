@@ -110,6 +110,8 @@ never returns a silent file.
 `vendor/` is a copy of `@ffmpeg/ffmpeg` 0.12.10 and `@ffmpeg/core` 0.12.6. It is served from
 this origin because browsers refuse to start a worker from a cross-origin script.
 
-## Donations
+## Source and donations
+
+Source code: https://github.com/onononoo/img
 
 this project is open source, so please donate to keep it up :) ! btc: bc1qs4z04ltddh6vaqd4stu3p4vekv253ht4cwqma4
