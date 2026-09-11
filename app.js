@@ -389,7 +389,7 @@ function finish(item, blob, ext, started, detail) {
   setStatus('Done in ' + secs + ' seconds.');
 
   const base = (item.file.name || 'output').replace(/\.[^.]+$/, '');
-  const name = base + '.img.' + ext;
+  const name = base + '.dotimg.' + ext;
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
   link.download = name;

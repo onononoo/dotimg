@@ -1,4 +1,4 @@
-# img
+# dotimg
 
 Compress any image, video, GIF, music or audio file down to a file size you name, in the
 browser. Nothing is uploaded: decoding and encoding happen on the machine that opens the page.
@@ -112,6 +112,6 @@ this origin because browsers refuse to start a worker from a cross-origin script
 
 ## Source and donations
 
-Source code: https://github.com/onononoo/img
+Source code: https://github.com/onononoo/dotimg
 
 this project is open source, so please donate to keep it up :) ! btc: bc1qs4z04ltddh6vaqd4stu3p4vekv253ht4cwqma4
