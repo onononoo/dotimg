@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- No stylesheet on purpose. This one line only stops a dark-mode browser from
+     recolouring an unstyled page into low-contrast grey on grey. -->
+<meta name="color-scheme" content="light">
+<title>img - compress a file to any size</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#128476;</text></svg>">
+</head>
+<body>
+
+<h1>img</h1>
+
+<p>Compress one image, video, GIF, song or MIDI file down to a size you pick.
+Everything happens in this browser. Nothing is uploaded anywhere.</p>
+
+<hr>
+
+<p>
+  <label for="picker"><b>1. Choose a file:</b></label>
+  <input type="file" id="picker">
+</p>
+
+<div id="details" hidden>
+
+  <table border="1" cellpadding="4" cellspacing="0">
+    <tr><td>Name</td><td id="dName"></td></tr>
+    <tr><td>Type</td><td id="dKind"></td></tr>
+    <tr><td>Size now</td><td id="dSize"></td></tr>
+    <tr><td id="dExtraLabel">Details</td><td id="dExtra"></td></tr>
+  </table>
+
+  <p>
+    <label for="outFormat"><b>2. Convert to:</b></label>
+    <select id="outFormat"></select>
+    <br>
+    <small id="formatNote"></small>
+  </p>
+
+  <p>
+    <label for="targetValue"><b>3. Target size:</b></label>
+    <input type="number" id="targetValue" value="1" min="1" step="any" size="8">
+    <select id="targetUnit">
+      <option value="1">bytes</option>
+      <option value="1000">KB</option>
+      <option value="1000000" selected>MB</option>
+      <option value="1000000000">GB</option>
+    </select>
+    <br>
+    <small>The target is a limit, not a goal. A file already smaller than this is left alone.</small>
+  </p>
+
+  <p>
+    <button type="button" id="go"><b>Compress</b></button>
+  </p>
+
+</div>
+
+<div id="output" hidden>
+  <hr>
+  <p id="status"></p>
+  <p id="result"></p>
+</div>
+
+<hr>
+
+<h3>How it works</h3>
+
+<p>Pictures are re-encoded over and over at different sizes until one lands under your target,
+keeping quality at a readable level and shrinking the picture rather than smearing it. Video and
+sound are given a bitrate worked out from how long they run, then re-encoded and corrected until
+the file fits. GIFs are rebuilt with a new colour palette, dropping frame rate and colours as
+needed. A MIDI file holds notes rather than sound, so it is rewritten instead: names and lyrics
+go first, then controllers, then musical detail, and it will never hand back a silent file.</p>
+
+<p>Some things are not possible and the page will say so rather than fail quietly. HEIC needs
+Apple's decoder and only works in Safari. Camera RAW differs for every manufacturer. Every format
+also has a smallest possible size from its own headers, and if your target is below that, the
+page tells you the floor and offers the smallest file it managed.</p>
+
+<hr>
+
+<p><small>this project is open source, so please donate to keep it up :) ! btc: bc1qs4z04ltddh6vaqd4stu3p4vekv253ht4cwqma4</small></p>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
