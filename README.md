@@ -3,7 +3,7 @@
 Compress any image, video, GIF, music or audio file down to a file size you name, in the
 browser. Nothing is uploaded: decoding and encoding happen on the machine that opens the page.
 
-## Running it
+## Running it locally
 
 Double click `start.bat`, or serve the folder any other way:
 
