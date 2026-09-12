@@ -280,7 +280,7 @@ async function run() {
       await attempt(item, out, target, performance.now());
     }
   } catch (err) {
-    failed(err);
+    failed(err, item, out);
   } finally {
     busy = false;
     $('go').disabled = false;
@@ -378,6 +378,26 @@ async function compressStill(item, out, budget, report) {
   }
 }
 
+// the chosen format key is also its file extension everywhere but here: alac is
+// carried inside an mp4 container, so it is written as .m4a
+const OUTPUT_EXT = { alac: 'm4a' };
+
+// when a target is out of reach the picture engine quietly falls back to png, so the
+// consolation download can hold different bytes than the format that was asked for.
+// name it after what it actually is rather than what was requested.
+const MIME_EXT = {
+  'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/avif': 'avif',
+  'image/gif': 'gif', 'image/bmp': 'bmp', 'image/tiff': 'tiff', 'image/x-icon': 'ico',
+};
+
+/** what the result should be called: the original name, the site, the new extension. */
+function downloadName(item, ext) {
+  const base = (item.file.name || 'output')
+    .replace(/\.[^.]+$/, '')            // drop the old extension
+    .replace(/\.dotimg(\.us)?$/i, '');   // and a marker left by an earlier pass
+  return base + '.dotimg.us.' + (OUTPUT_EXT[ext] || ext);
+}
+
 function finish(item, blob, ext, started, detail) {
   const secs = ((performance.now() - started) / 1000).toFixed(1);
   const pct = item.file.size ? Math.round((1 - blob.size / item.file.size) * 100) : 0;
@@ -388,8 +408,7 @@ function finish(item, blob, ext, started, detail) {
 
   setStatus('done in ' + secs + ' seconds.');
 
-  const base = (item.file.name || 'output').replace(/\.[^.]+$/, '');
-  const name = base + '.dotimg.' + ext;
+  const name = downloadName(item, ext);
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
   link.download = name;
@@ -403,16 +422,19 @@ function finish(item, blob, ext, started, detail) {
     document.createElement('br'), link);
 }
 
-function failed(err) {
+function failed(err, item, out) {
   setStatus('could not do it: ' + (err.message || String(err)));
   $('result').textContent = '';
 
   const closest = err.smallest;
   if (!closest?.blob) return;
 
+  // this is still a real file, so it gets a real name: saving it as an extensionless
+  // "smallest-possible" left it unopenable
+  const name = downloadName(item, MIME_EXT[closest.blob.type] || out);
   const link = document.createElement('a');
   link.href = URL.createObjectURL(closest.blob);
-  link.download = 'smallest-possible';
+  link.download = name;
   link.textContent = 'download that instead';
   $('result').append('the smallest this could get is ' + fmtBytes(closest.size) + '. ', link);
 }
