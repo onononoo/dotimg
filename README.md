@@ -1,4 +1,4 @@
-# dotimg
+# dotimg, runs completely in YOUR browser.
 
 Compress any image, video, GIF, music or audio file down to a file size you name, in the
 browser. Nothing is uploaded: decoding and encoding happen on the machine that opens the page.
@@ -23,8 +23,6 @@ gigabytes, and press Compress.
 
 The target is a ceiling, not a goal. A file already under it is left untouched, and a result is
 never larger than the file that went in.
-
-The page is deliberately plain: no stylesheet at all, just browser defaults.
 
 ## Supported formats
 
