@@ -509,6 +509,82 @@ export async function encodeStillViaFFmpeg(pngBlob, format, report) {
 }
 
 /** decode a still image ffmpeg understands but the browser does not, such as tiff. */
+/**
+ * turn an animated webp into something this ffmpeg can read.
+ *
+ * the bundled ffmpeg can write animated webp but not read it: its decoder logs
+ * "skipping unsupported chunk: ANMF" for every frame and gives up, and reading support
+ * only arrived in ffmpeg 7.1. the browser's ImageDecoder reads these fine and hands
+ * back fully composited frames, so it does the decoding, and ffmpeg only has to join
+ * plain png frames into a lossless intermediate the normal compressors accept.
+ */
+export async function decodeAnimatedWebp(file, report) {
+  if (typeof ImageDecoder === 'undefined' || !(await ImageDecoder.isTypeSupported('image/webp'))) {
+    throw new Error('this browser cannot split an animated webp into frames, and the bundled ' +
+      'ffmpeg cannot either. try chrome, edge or firefox, or save it as a gif first.');
+  }
+
+  const decoder = new ImageDecoder({ data: await file.arrayBuffer(), type: 'image/webp' });
+  await decoder.tracks.ready;
+  await decoder.completed;
+  const count = decoder.tracks.selectedTrack.frameCount;
+
+  const f = await freshFFmpeg(s => report?.state?.(s));
+  const names = [];
+  let list = '';
+  let shortestMs = Infinity;
+  let totalMs = 0;
+
+  try {
+    for (let i = 0; i < count; i++) {
+      report?.step?.(i, count, 'reading frame ' + (i + 1) + ' of ' + count);
+      const { image } = await decoder.decode({ frameIndex: i });
+
+      // some encoders write frames with no duration; browsers play those at about
+      // 100 ms, so match what people actually see rather than a zero-length flash
+      const rawMs = image.duration != null ? image.duration / 1000 : 0;
+      const ms = rawMs > 10 ? rawMs : 100;
+      shortestMs = Math.min(shortestMs, ms);
+      totalMs += ms;
+
+      const canvas = new OffscreenCanvas(image.displayWidth, image.displayHeight);
+      canvas.getContext('2d').drawImage(image, 0, 0);
+      image.close();
+      const png = new Uint8Array(await (await canvas.convertToBlob({ type: 'image/png' })).arrayBuffer());
+
+      const name = 'webp_' + String(i).padStart(5, '0') + '.png';
+      await f.writeFile(name, png);
+      names.push(name);
+      list += "file '" + name + "'\nduration " + (ms / 1000).toFixed(4) + '\n';
+    }
+    // the concat demuxer ignores the last duration unless the final file is listed again
+    list += "file '" + names[names.length - 1] + "'\n";
+    await f.writeFile('webp_frames.txt', new TextEncoder().encode(list));
+
+    // a constant rate fine enough for the shortest frame; the fps filter repeats frames
+    // to fill longer ones, so a deliberate pause keeps its length. the rate is kept
+    // exact rather than rounded, and the output is cut at the true total: rounding 33.3
+    // down to 33, plus the extra frame the concat trailing entry contributes, made a
+    // 0.9 second loop play back at 0.97 seconds.
+    const rate = Math.max(1, Math.min(50, 1000 / shortestMs));
+    await safeDelete(f, 'webp_intermediate.mkv');
+    const code = await execChecked(f, ['-hide_banner', '-y', '-f', 'concat', '-safe', '0',
+      '-i', 'webp_frames.txt', '-vf', 'fps=' + rate.toFixed(4), '-t', (totalMs / 1000).toFixed(4),
+      '-c:v', 'png', '-f', 'matroska', 'webp_intermediate.mkv']);
+    if (code !== 0) throw new Error('could not rebuild the frames of this animated webp');
+
+    const data = await f.readFile('webp_intermediate.mkv');
+    await safeDelete(f, 'webp_intermediate.mkv');
+    // returned as a file, not a path: the engine may be recycled before the compressor
+    // runs, and a path would point into an instance that no longer exists
+    return new File([toBlob(data, 'video/x-matroska')], 'animation.mkv', { type: 'video/x-matroska' });
+  } finally {
+    decoder.close();
+    for (const name of names) await safeDelete(f, name);
+    await safeDelete(f, 'webp_frames.txt');
+  }
+}
+
 export async function decodeStillViaFFmpeg(file, report) {
   const f = await freshFFmpeg(s => report?.state?.(s));
   const inName = 'still_' + clean(file.name || 'input');

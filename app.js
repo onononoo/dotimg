@@ -1,6 +1,6 @@
 import { compressImage, decodeImage, fitImageVia, supportsEncode } from './image-engine.js';
 import { compressVideo, compressGif, compressAudio, decodeStillViaFFmpeg, encodeStillViaFFmpeg,
-         onProgress, engineLoaded, FFMPEG_STILL_FORMATS } from './media-engine.js';
+         decodeAnimatedWebp, onProgress, engineLoaded, FFMPEG_STILL_FORMATS } from './media-engine.js';
 import { compressMidi } from './midi-engine.js';
 
 const $ = id => document.getElementById(id);
@@ -105,6 +105,13 @@ function kindOf(file) {
 }
 
 /** webp and png can be animated; sniff the bytes rather than trusting the extension. */
+/** true for a webp file, judged by its riff signature rather than its name. */
+async function isWebp(file) {
+  const head = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+  const ascii = String.fromCharCode(...head);
+  return ascii.startsWith('RIFF') && ascii.slice(8, 12) === 'WEBP';
+}
+
 async function isAnimated(file) {
   const head = new Uint8Array(await file.slice(0, 4096).arrayBuffer());
   const ascii = String.fromCharCode(...head.slice(0, 64));
@@ -329,14 +336,24 @@ async function attempt(item, out, target, started) {
   // animation or video from here on.
   if (!engineLoaded()) setStatus('loading the video engine. this happens once.');
 
+  // the bundled ffmpeg cannot read animated webp, so the browser splits it into frames
+  // first and the compressors below get an intermediate they can read. the budget was
+  // already set from the original file, so the larger lossless intermediate cannot
+  // push the result past the size of what went in.
+  let source = item.file;
+  if (item.kind === 'anim' && await isWebp(item.file)) {
+    setStatus('splitting the animation into frames...');
+    source = await decodeAnimatedWebp(item.file, report);
+  }
+
   if (out === 'gif') {
-    const r = await compressGif(item.file, budget, {}, report);
+    const r = await compressGif(source, budget, {}, report);
     finish(item, r.blob, 'gif', started, r.width + ' pixels wide, ' + r.fps +
       ' frames a second, ' + r.colors + ' colours');
     return;
   }
 
-  const r = await compressVideo(item.file, budget, { container: out, keepAudio: true }, report);
+  const r = await compressVideo(source, budget, { container: out, keepAudio: true }, report);
   finish(item, r.blob, r.container, started, Math.round(r.duration) +
     ' seconds at about ' + Math.round(r.size * 8 / r.duration / 1000) + ' kbps');
 }
