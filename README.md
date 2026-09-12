@@ -130,3 +130,4 @@ The 32 MB core binary is the one exception, for the size reason above.
 Source code: https://github.com/onononoo/dotimg
 
 this project is open source, so please donate to keep it up :) ! btc: bc1qs4z04ltddh6vaqd4stu3p4vekv253ht4cwqma4
+cicada 3301
