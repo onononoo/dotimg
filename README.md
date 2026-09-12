@@ -96,6 +96,22 @@ never returns a silent file.
   usually invisible.
 - DRM-protected media cannot be read at all.
 
+## Deploying it
+
+`vendor/core/ffmpeg-core.wasm` is 32 MB, which is over the 25 MB per-file limit on
+Cloudflare Pages and several other static hosts, so it is gitignored and never uploaded.
+The page checks for it at load: when the file really is there it is used, and when it is
+missing the identical build is fetched from `cdn.jsdelivr.net` instead. That is why the
+site works locally, where the file exists on disk, and also works deployed, where it does
+not.
+
+Getting this wrong is what produces `CompileError: WebAssembly.instantiate(): BufferSource
+argument is empty`: the browser downloaded a 404 page instead of the binary.
+
+If you would rather not depend on the CDN, host the file somewhere with no size limit and
+point `CORE_WASM_CDN` in `media-engine.js` at it. It must be the `@ffmpeg/core@0.12.6`
+build, because the loader beside it is that version and the two must match.
+
 ## Layout
 
 | File | Role |
@@ -105,10 +121,11 @@ never returns a silent file.
 | `image-engine.js` | Still-image scale and quality search |
 | `media-engine.js` | FFmpeg loading and recycling, video, audio and GIF searches |
 | `midi-engine.js` | MIDI parser, rewriter and reduction ladder |
-| `vendor/` | FFmpeg WebAssembly build, about 32 MB, served locally so the page works offline |
+| `vendor/` | FFmpeg WebAssembly build; the 32 MB core is gitignored and falls back to a CDN |
 
-`vendor/` is a copy of `@ffmpeg/ffmpeg` 0.12.10 and `@ffmpeg/core` 0.12.6. It is served from
-this origin because browsers refuse to start a worker from a cross-origin script.
+`vendor/` is a copy of `@ffmpeg/ffmpeg` 0.12.10 and `@ffmpeg/core` 0.12.6. The JavaScript is
+served from this origin because browsers refuse to start a worker from a cross-origin script.
+The 32 MB core binary is the one exception, for the size reason above.
 
 ## Source and donations
 

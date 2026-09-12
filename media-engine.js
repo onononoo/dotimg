@@ -1,11 +1,36 @@
 // Video / animation / audio compression via FFmpeg compiled to WebAssembly.
 // Single-threaded core, so it needs no cross-origin isolation headers.
 
-// Everything is served from this origin: a cross-origin worker script is blocked
-// by the browser, and local copies also let the whole site work offline.
+// The wrapper and the core loader are served from this origin, because browsers refuse
+// to start a worker from a cross-origin script.
 const FFMPEG_JS = './vendor/ffmpeg/index.js';
 const CORE_JS = new URL('./vendor/core/ffmpeg-core.js', import.meta.url).href;
-const CORE_WASM = new URL('./vendor/core/ffmpeg-core.wasm', import.meta.url).href;
+
+// The core binary is 32 MB, which is over the per-file limit on several static hosts
+// (Cloudflare Pages allows 25 MB), so it is not always deployed with the rest of the
+// site. Prefer the local copy when it is really there, and otherwise fetch the same
+// version from the CDN it was downloaded from. Getting this wrong gives an empty
+// download and a CompileError about an empty BufferSource, so the check is explicit.
+const CORE_WASM_LOCAL = new URL('./vendor/core/ffmpeg-core.wasm', import.meta.url).href;
+const CORE_WASM_CDN =
+  'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.wasm';
+
+let wasmSource = 'unknown';
+export function wasmOrigin() { return wasmSource; }
+
+async function resolveWasmURL() {
+  try {
+    const res = await fetch(CORE_WASM_LOCAL, { method: 'HEAD' });
+    const type = res.headers.get('content-type') || '';
+    const size = Number(res.headers.get('content-length') || 0);
+    // A missing file can still answer 200 with an HTML page on some hosts, and a real
+    // core is tens of megabytes, so a small or HTML answer means it is not there.
+    const plausible = res.ok && !type.includes('text/html') && (size === 0 || size > 1000000);
+    if (plausible) { wasmSource = 'local'; return CORE_WASM_LOCAL; }
+  } catch { /* offline, blocked, or no such file: fall through to the CDN */ }
+  wasmSource = 'cdn';
+  return CORE_WASM_CDN;
+}
 
 let loading = null;
 let ff = null;
@@ -21,6 +46,7 @@ export async function getFFmpeg(onState) {
   if (loading) return loading;
   loading = (async () => {
     onState?.('loading engine (~32 MB, cached after this)');
+    const wasmURL = await resolveWasmURL();
     const { FFmpeg } = await import(FFMPEG_JS);
     const inst = new FFmpeg();
     inst.on('log', ({ message }) => {
@@ -28,7 +54,15 @@ export async function getFFmpeg(onState) {
       if (logLines.length > 1200) logLines.shift();
     });
     inst.on('progress', ({ progress }) => progressSink?.(progress));
-    await inst.load({ coreURL: CORE_JS, wasmURL: CORE_WASM });
+    try {
+      await inst.load({ coreURL: CORE_JS, wasmURL });
+    } catch (e) {
+      loading = null; // let the next attempt start over rather than reuse a dead load
+      throw new Error(wasmSource === 'cdn'
+        ? 'could not load the compression engine. The 32 MB core is not on this site, ' +
+          'and the copy on cdn.jsdelivr.net could not be fetched either.'
+        : 'could not load the compression engine from this site: ' + (e.message || e));
+    }
     onState?.('ready');
     ff = inst;
     return inst;
