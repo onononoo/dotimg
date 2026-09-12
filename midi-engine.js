@@ -46,7 +46,7 @@ export function parseMidi(bytes) {
   const format = r.u16();
   const trackCount = r.u16();
   const division = r.u16();
-  r.i += headerLen - 6; // skip any extra header bytes
+  r.i += Math.max(0, headerLen - 6); // skip any extra header bytes, never seek backwards
 
   const tracks = [];
   for (let t = 0; t < trackCount && r.i < bytes.length; t++) {
@@ -60,7 +60,15 @@ export function parseMidi(bytes) {
     while (r.i < end) {
       tick += r.varlen();
       let b = r.byte();
-      if (b < 0x80) { r.i--; b = status; } else if (b < 0xf0) { status = b; }
+      if (b < 0x80) {
+        // Running status: reuse the last status byte. There not being one means the
+        // track opened mid-message, so the bytes from here on are meaningless.
+        if (!status) throw new Error('this MIDI file is corrupt (a track starts mid-message)');
+        r.i--;
+        b = status;
+      } else if (b < 0xf0) {
+        status = b;
+      }
 
       if (b === 0xff) {
         const type = r.byte();
@@ -109,7 +117,6 @@ export function renderMidi(song, opts) {
     if (ev.kind === 'meta') {
       if (ev.type === 0x2f) continue;                        // end of track is re-added once
       if (!KEEP_META.has(ev.type)) continue;
-      if (opts.dropTempo && ev.type !== 0x51 && ev.type !== 0x58) continue;
     } else {
       const { hi, channel, a } = ev;
       if (opts.dropChannels?.has(channel)) continue;

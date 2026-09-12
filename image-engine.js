@@ -33,6 +33,13 @@ function encode(canvas, mime, quality) {
   return new Promise(res => canvas.toBlob(res, mime, quality));
 }
 
+/** Hand a canvas's pixels back now rather than waiting for the collector. A full frame
+ *  is several megabytes and a search allocates a fresh one per attempt, which is enough
+ *  memory to matter on a large picture. */
+function release(canvas) {
+  if (canvas) { canvas.width = 0; canvas.height = 0; }
+}
+
 /** Yield to the event loop between encodes so the page stays responsive.
  *  A message channel rather than a timer: browsers clamp setTimeout to one second
  *  in a background tab, which would stall a search behind a dozen idle seconds. */
@@ -110,7 +117,12 @@ async function findScale(bitmap, mime, targetBytes, measure, state, onStep) {
     }
 
     if (blob.size <= targetBytes) {
-      if (!best || scale > best.scale) best = { canvas, blob, scale };
+      if (!best || scale > best.scale) {
+        release(best?.canvas);        // the previous best is now dead weight
+        best = { canvas, blob, scale };
+      } else {
+        release(canvas);
+      }
       lo = Math.max(lo, scale);
       if (scale >= 1 || blob.size >= targetBytes * 0.75) break;
       let next = scale * Math.min(2.5, Math.sqrt(targetBytes * 0.93 / blob.size));
@@ -120,7 +132,9 @@ async function findScale(bitmap, mime, targetBytes, measure, state, onStep) {
     } else {
       hi = Math.min(hi, scale);
       // Every format has a header floor; at one pixel there is nothing left to remove.
-      if (canvas.width <= 1 && canvas.height <= 1) break;
+      const atFloor = canvas.width <= 1 && canvas.height <= 1;
+      release(canvas);                // too big, so this frame is never coming back
+      if (atFloor) break;
       let next = scale * Math.sqrt(targetBytes / blob.size) * 0.92;
       if (lo > 0) next = Math.max(next, (lo + scale) / 2);
       if (next < MIN_SCALE) break;
