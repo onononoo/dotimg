@@ -23,7 +23,7 @@ const EXT_KIND = {
   flv: 'video', wmv: 'video', '3gp': 'video', '3g2': 'video', mpeg: 'video', mpg: 'video',
   ogv: 'video', ts: 'video', mts: 'video', m2ts: 'video', asf: 'video', vob: 'video',
   // still images
-  jpg: 'image', jpeg: 'image', jfif: 'image', png: 'image', bmp: 'image', tiff: 'image',
+  jpg: 'image', jpeg: 'image', jfif: 'image', png: 'maybe-anim', bmp: 'image', tiff: 'image',
   tif: 'image', svg: 'image', ico: 'image', heic: 'image', heif: 'image', raw: 'image',
   dng: 'image', cr2: 'image', nef: 'image', arw: 'image', orf: 'image', rw2: 'image',
   avif: 'image', jxl: 'image',
