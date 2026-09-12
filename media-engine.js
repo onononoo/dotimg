@@ -1,16 +1,16 @@
-// Video / animation / audio compression via FFmpeg compiled to WebAssembly.
-// Single-threaded core, so it needs no cross-origin isolation headers.
+// video / animation / audio compression via ffmpeg compiled to webassembly.
+// single-threaded core, so it needs no cross-origin isolation headers.
 
-// The wrapper and the core loader are served from this origin, because browsers refuse
+// the wrapper and the core loader are served from this origin, because browsers refuse
 // to start a worker from a cross-origin script.
 const FFMPEG_JS = './vendor/ffmpeg/index.js';
 const CORE_JS = new URL('./vendor/core/ffmpeg-core.js', import.meta.url).href;
 
-// The core binary is 32 MB, which is over the per-file limit on several static hosts
-// (Cloudflare Pages allows 25 MB), so it is not always deployed with the rest of the
-// site. Prefer the local copy when it is really there, and otherwise fetch the same
-// version from the CDN it was downloaded from. Getting this wrong gives an empty
-// download and a CompileError about an empty BufferSource, so the check is explicit.
+// the core binary is 32 mb, which is over the per-file limit on several static hosts
+// (cloudflare pages allows 25 mb), so it is not always deployed with the rest of the
+// site. prefer the local copy when it is really there, and otherwise fetch the same
+// version from the cdn it was downloaded from. getting this wrong gives an empty
+// download and a compileerror about an empty buffersource, so the check is explicit.
 const CORE_WASM_LOCAL = new URL('./vendor/core/ffmpeg-core.wasm', import.meta.url).href;
 const CORE_WASM_CDN =
   'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.wasm';
@@ -23,8 +23,8 @@ async function resolveWasmURL() {
     const res = await fetch(CORE_WASM_LOCAL, { method: 'HEAD' });
     const type = res.headers.get('content-type') || '';
     const size = Number(res.headers.get('content-length') || 0);
-    // A missing file can still answer 200 with an HTML page on some hosts, and a real
-    // core is tens of megabytes, so a small or HTML answer means it is not there.
+    // a missing file can still answer 200 with an html page on some hosts, and a real
+    // core is tens of megabytes, so a small or html answer means it is not there.
     const plausible = res.ok && !type.includes('text/html') && (size === 0 || size > 1000000);
     if (plausible) { wasmSource = 'local'; return CORE_WASM_LOCAL; }
   } catch { /* offline, blocked, or no such file: fall through to the CDN */ }
@@ -45,7 +45,7 @@ export async function getFFmpeg(onState) {
   if (ff) return ff;
   if (loading) return loading;
   loading = (async () => {
-    onState?.('loading engine (~32 MB, cached after this)');
+    onState?.('loading engine (~32 mb, cached after this)');
     const wasmURL = await resolveWasmURL();
     const { FFmpeg } = await import(FFMPEG_JS);
     const inst = new FFmpeg();
@@ -59,7 +59,7 @@ export async function getFFmpeg(onState) {
     } catch (e) {
       loading = null; // let the next attempt start over rather than reuse a dead load
       throw new Error(wasmSource === 'cdn'
-        ? 'could not load the compression engine. The 32 MB core is not on this site, ' +
+        ? 'could not load the compression engine. the 32 mb core is not on this site, ' +
           'and the copy on cdn.jsdelivr.net could not be fetched either.'
         : 'could not load the compression engine from this site: ' + (e.message || e));
     }
@@ -72,14 +72,14 @@ export async function getFFmpeg(onState) {
 
 const clean = s => s.replace(/[^\w.-]/g, '_');
 
-// FFmpeg's heap grows a little with every run and never fully gives it back, so a long
-// queue eventually traps. Reloading costs about a tenth of a second locally, so the
+// ffmpeg's heap grows a little with every run and never fully gives it back, so a long
+// queue eventually traps. reloading costs about a tenth of a second locally, so the
 // engine is retired well before it gets there.
 let execCount = 0;
 let bytesSinceLoad = 0;
-// Kept deliberately high. Recycling allocates a new 32 MB instance while the old one
+// kept deliberately high. recycling allocates a new 32 mb instance while the old one
 // waits to be collected, so retiring the engine too eagerly costs more memory than it
-// saves. A crash is caught and retried instead, which is cheaper than churning.
+// saves. a crash is caught and retried instead, which is cheaper than churning.
 const MAX_RUNS_PER_ENGINE = 40;
 const MAX_BYTES_PER_ENGINE = 512 * 1024 * 1024;
 
@@ -103,7 +103,7 @@ async function write(f, file, name) {
 async function safeDelete(f, name) { try { await f.deleteFile(name); } catch {} }
 
 /**
- * Run FFmpeg and survive a hard crash. A wasm trap leaves the heap unusable, so the
+ * run ffmpeg and survive a hard crash. a wasm trap leaves the heap unusable, so the
  * instance is thrown away and the next file starts a fresh one instead of failing
  * for the rest of the session.
  */
@@ -114,9 +114,9 @@ async function execChecked(f, args) {
   } catch (e) {
     try { f.terminate(); } catch {}
     if (ff === f) { ff = null; loading = null; }
-    // Any throw out of exec means the wasm heap is gone and the instance above was
-    // just discarded, so every one of these is a restart. The core reports a hard
-    // abort as a TypeError from its own error handling, which is why the text is
+    // any throw out of exec means the wasm heap is gone and the instance above was
+    // just discarded, so every one of these is a restart. the core reports a hard
+    // abort as a typeerror from its own error handling, which is why the text is
     // not matched on: the terminate already happened either way.
     throw new Error('the engine hit its memory limit on this file and has been restarted');
   }
@@ -127,7 +127,7 @@ function toBlob(data, type) {
   return new Blob([buf], { type });
 }
 
-// Probe duration, resolution, fps and stream layout from FFmpeg's own log output.
+// probe duration, resolution, fps and stream layout from ffmpeg's own log output.
 async function probe(f, inName) {
   logLines.length = 0;
   try { await execChecked(f, ['-hide_banner', '-i', inName]); } catch (e) {
@@ -164,7 +164,7 @@ function evenDims(w, h, scale) {
   ];
 }
 
-// Each video container with the codecs that belong in it. Only these four fields
+// each video container with the codecs that belong in it. only these four fields
 // differ between them; the bitrate budgeting below is shared.
 export const VIDEO_FORMATS = {
   mp4:  { ext: 'mp4',  mime: 'video/mp4',      video: 'libx264',     audio: 'aac' },
@@ -175,7 +175,7 @@ export const VIDEO_FORMATS = {
 };
 
 /**
- * Encode video (or audio-only) to a byte target: budget a bitrate from the real
+ * encode video (or audio-only) to a byte target: budget a bitrate from the real
  * duration, then correct that bitrate over repeated passes until it lands under.
  */
 export async function compressVideo(file, targetBytes, opts, report) {
@@ -194,7 +194,7 @@ export async function compressVideo(file, targetBytes, opts, report) {
     const outName = 'out.' + container;
     const mime = spec.mime;
 
-    // Muxer overhead grows with duration, so hold back a safety margin.
+    // muxer overhead grows with duration, so hold back a safety margin.
     const overhead = Math.min(0.1, 0.02 + info.duration * 0.00015);
     const budgetBits = targetBytes * 8 * (1 - overhead);
     const totalBudgetBps = budgetBits / info.duration;
@@ -207,7 +207,7 @@ export async function compressVideo(file, targetBytes, opts, report) {
 
     let videoBps = Math.max(1000, Math.floor(totalBudgetBps) - audioBps);
 
-    // Never spend more bits than the source already has; re-encoding must not inflate.
+    // never spend more bits than the source already has; re-encoding must not inflate.
     const sourceBps = file.size * 8 / info.duration;
     if (videoBps + audioBps > sourceBps) {
       videoBps = Math.max(1000, Math.floor(sourceBps * 0.9) - audioBps);
@@ -230,7 +230,7 @@ export async function compressVideo(file, targetBytes, opts, report) {
       const args = ['-hide_banner', '-y', '-i', inName];
 
       if (info.hasVideo) {
-        // Keep bits-per-pixel sane: drop frame rate then frame size when the budget is thin.
+        // keep bits-per-pixel sane: drop frame rate then frame size when the budget is thin.
         let fps = srcFps;
         if (videoBps < 150000 && fps > 24) fps = 24;
         if (videoBps < 60000 && fps > 15) fps = 15;
@@ -251,7 +251,7 @@ export async function compressVideo(file, targetBytes, opts, report) {
           args.push('-c:v', 'libx264', '-preset', 'veryfast', '-b:v', String(videoBps),
             '-maxrate', String(Math.round(videoBps * 1.35)),
             '-bufsize', String(Math.round(videoBps * 2)), '-pix_fmt', 'yuv420p');
-          // faststart only means anything in an MP4-family container.
+          // faststart only means anything in an mp4-family container.
           if (spec.ext === 'mp4' || spec.ext === 'mov') args.push('-movflags', '+faststart');
         }
       } else {
@@ -261,7 +261,7 @@ export async function compressVideo(file, targetBytes, opts, report) {
       if (audioBps > 0) {
         args.push('-c:a', spec.audio, '-b:a', String(audioBps),
           '-ac', audioBps < 48000 ? '1' : '2');
-        // MP3 in AVI cannot use arbitrary sample rates the way AAC can.
+        // mp3 in avi cannot use arbitrary sample rates the way aac can.
         if (spec.audio === 'libmp3lame') args.push('-ar', '44100');
       } else {
         args.push('-an');
@@ -278,15 +278,15 @@ export async function compressVideo(file, targetBytes, opts, report) {
         code = await execChecked(f, args);
       } catch (e) {
         // libvpx wants more heap than this single-threaded core can grow to, and gives
-        // up somewhere above a very small frame. Say that plainly instead of blaming
+        // up somewhere above a very small frame. say that plainly instead of blaming
         // the file, and point at the containers that do work.
         if (spec.video.startsWith('libvpx') && /memory limit/.test(e.message)) {
-          throw new Error('the bundled VP9 encoder runs out of memory above tiny frame sizes, ' +
-            'so WebM is unreliable in this browser. MP4, MKV, MOV or AVI will work.');
+          throw new Error('the bundled vp9 encoder runs out of memory above tiny frame sizes, ' +
+            'so webm is unreliable in this browser. mp4, mkv, mov or avi will work.');
         }
         throw e;
       }
-      if (code !== 0) throw new Error('FFmpeg could not encode this file (exit ' + code + ')');
+      if (code !== 0) throw new Error('ffmpeg could not encode this file (exit ' + code + ')');
 
       const data = await f.readFile(outName);
       const size = data.length ?? data.byteLength;
@@ -319,8 +319,8 @@ export async function compressVideo(file, targetBytes, opts, report) {
 
 /* ---------- audio ---------- */
 
-// Container and encoder for each audio output. Every one of these is present in
-// this FFmpeg build, checked with -encoders and -formats.
+// container and encoder for each audio output. every one of these is present in
+// this ffmpeg build, checked with -encoders and -formats.
 export const AUDIO_FORMATS = {
   mp3:  { ext: 'mp3',  mime: 'audio/mpeg',  codec: 'libmp3lame', lossy: true },
   aac:  { ext: 'aac',  mime: 'audio/aac',   codec: 'aac',        lossy: true, muxer: 'adts' },
@@ -334,12 +334,12 @@ export const AUDIO_FORMATS = {
   aiff: { ext: 'aiff', mime: 'audio/aiff',  codec: 'pcm_s16be',  lossy: false },
 };
 
-// Each lossy encoder refuses to go below its own floor; asking for less than this
+// each lossy encoder refuses to go below its own floor; asking for less than this
 // wastes a pass, so the search clamps here instead.
 const MIN_BITRATE = { libmp3lame: 8000, aac: 8000, libopus: 6000, libvorbis: 32000, wmav2: 24000 };
 
-// Encoders accept only their own sample rates, and libopus is the strict one:
-// hand it 32 kHz and it refuses the whole job.
+// encoders accept only their own sample rates, and libopus is the strict one:
+// hand it 32 khz and it refuses the whole job.
 const RATES = {
   libopus: [8000, 12000, 16000, 24000, 48000],
   libmp3lame: [8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000],
@@ -348,7 +348,7 @@ const RATES = {
   wmav2: [8000, 11025, 16000, 22050, 32000, 44100, 48000],
 };
 
-/** Nearest rate at or above what we asked for, falling back to the codec's best. */
+/** nearest rate at or above what we asked for, falling back to the codec's best. */
 function pickRate(codec, desired) {
   const allowed = RATES[codec];
   if (!allowed) return desired;
@@ -356,7 +356,7 @@ function pickRate(codec, desired) {
 }
 
 /**
- * Encode audio to a byte target. Lossy formats get a bitrate budgeted from the
+ * encode audio to a byte target. lossy formats get a bitrate budgeted from the
  * duration and corrected against the real output; lossless formats have no
  * bitrate knob, so sample rate, channels and bit depth are searched instead.
  */
@@ -377,7 +377,7 @@ export async function compressAudio(file, targetBytes, opts, report) {
     const run = async (args) => {
       await safeDelete(f, outName);
       const code = await execChecked(f, ['-hide_banner', '-y', '-i', inName, '-vn', ...args, ...mux, outName]);
-      if (code !== 0) throw new Error('FFmpeg could not encode this audio (exit ' + code + ')');
+      if (code !== 0) throw new Error('ffmpeg could not encode this audio (exit ' + code + ')');
       const data = await f.readFile(outName);
       const size = data.length ?? data.byteLength;
       return { size, blob: toBlob(data, fmt.mime) };
@@ -396,7 +396,7 @@ export async function compressAudio(file, targetBytes, opts, report) {
       const MAX_PASSES = 4;
 
       for (let pass = 0; pass < MAX_PASSES; pass++) {
-        // Stereo and full sample rate stop being worth their bits at low bitrates.
+        // stereo and full sample rate stop being worth their bits at low bitrates.
         const channels = bps < 48000 ? 1 : 2;
         const wanted = bps < 16000 ? 16000 : bps < 32000 ? 24000 : bps < 64000 ? 32000 : 44100;
         const rate = pickRate(fmt.codec, wanted);
@@ -419,7 +419,7 @@ export async function compressAudio(file, targetBytes, opts, report) {
         }
       }
     } else {
-      // Lossless: rank the quality settings and binary search the ranking.
+      // lossless: rank the quality settings and binary search the ranking.
       const rungs = [];
       for (const rate of [48000, 44100, 32000, 22050, 16000, 11025, 8000]) {
         for (const channels of [2, 1]) {
@@ -431,8 +431,8 @@ export async function compressAudio(file, targetBytes, opts, report) {
       }
       rungs.sort((a, b) => b.score - a.score);
 
-      // Bit depth is expressed differently per encoder: PCM picks a codec, FLAC takes
-      // packed sample formats, and ALAC only accepts planar ones.
+      // bit depth is expressed differently per encoder: pcm picks a codec, flac takes
+      // packed sample formats, and alac only accepts planar ones.
       const sampleFmt = (depth) => {
         if (fmt.codec === 'pcm_s16le') return ['-c:a', depth <= 8 ? 'pcm_u8' : 'pcm_s16le'];
         if (fmt.codec === 'pcm_s16be') return ['-c:a', depth <= 8 ? 'pcm_s8' : 'pcm_s16be'];
@@ -466,8 +466,8 @@ export async function compressAudio(file, targetBytes, opts, report) {
   }
 }
 
-// Still formats the canvas cannot write, so FFmpeg does it. GIF needs a generated
-// palette to look like anything, and ICO has a hard 256 pixel limit of its own.
+// still formats the canvas cannot write, so ffmpeg does it. gif needs a generated
+// palette to look like anything, and ico has a hard 256 pixel limit of its own.
 export const FFMPEG_STILL_FORMATS = {
   gif:  { ext: 'gif',  mime: 'image/gif' },
   bmp:  { ext: 'bmp',  mime: 'image/bmp' },
@@ -475,7 +475,7 @@ export const FFMPEG_STILL_FORMATS = {
   ico:  { ext: 'ico',  mime: 'image/x-icon', maxSide: 256 },
 };
 
-/** Re-encode a PNG blob as one of the still formats only FFmpeg can write. */
+/** re-encode a png blob as one of the still formats only ffmpeg can write. */
 export async function encodeStillViaFFmpeg(pngBlob, format, report) {
   const spec = FFMPEG_STILL_FORMATS[format];
   if (!spec) throw new Error('unsupported still format: ' + format);
@@ -487,7 +487,7 @@ export async function encodeStillViaFFmpeg(pngBlob, format, report) {
   try {
     const args = ['-hide_banner', '-y', '-i', 'still_in.png'];
     if (spec.maxSide) {
-      // Shrink only if it is over the limit, and keep the aspect ratio.
+      // shrink only if it is over the limit, and keep the aspect ratio.
       args.push('-vf', "scale='min(" + spec.maxSide + ",iw)':'min(" + spec.maxSide +
         ",ih)':force_original_aspect_ratio=decrease");
     }
@@ -498,7 +498,7 @@ export async function encodeStillViaFFmpeg(pngBlob, format, report) {
 
     await safeDelete(f, outName);
     const code = await execChecked(f, args);
-    if (code !== 0) throw new Error('FFmpeg could not write a ' + format.toUpperCase() + ' here');
+    if (code !== 0) throw new Error('ffmpeg could not write a ' + format + ' here');
     const data = await f.readFile(outName);
     const blob = toBlob(data, spec.mime);
     await safeDelete(f, outName);
@@ -508,7 +508,7 @@ export async function encodeStillViaFFmpeg(pngBlob, format, report) {
   }
 }
 
-/** Decode a still image FFmpeg understands but the browser does not, such as TIFF. */
+/** decode a still image ffmpeg understands but the browser does not, such as tiff. */
 export async function decodeStillViaFFmpeg(file, report) {
   const f = await freshFFmpeg(s => report?.state?.(s));
   const inName = 'still_' + clean(file.name || 'input');
@@ -516,7 +516,7 @@ export async function decodeStillViaFFmpeg(file, report) {
   try {
     await safeDelete(f, 'still.png');
     const code = await execChecked(f, ['-hide_banner', '-y', '-i', inName, '-frames:v', '1', 'still.png']);
-    if (code !== 0) throw new Error('FFmpeg could not decode this image either');
+    if (code !== 0) throw new Error('ffmpeg could not decode this image either');
     const data = await f.readFile('still.png');
     const blob = toBlob(data, 'image/png');
     await safeDelete(f, 'still.png');
@@ -526,7 +526,7 @@ export async function decodeStillViaFFmpeg(file, report) {
   }
 }
 
-/** Rebuild an animation as a GIF, trading size, frame rate and palette for bytes. */
+/** rebuild an animation as a gif, trading size, frame rate and palette for bytes. */
 export async function compressGif(file, targetBytes, opts, report) {
   const f = await freshFFmpeg(s => report?.state?.(s));
   const inName = 'in_' + clean(file.name || 'input');
@@ -537,8 +537,8 @@ export async function compressGif(file, targetBytes, opts, report) {
     const srcW = info.width || 480;
     const srcFps = info.fps > 0 && info.fps < 120 ? info.fps : 15;
 
-    // Every combination of width, frame rate and palette, ranked by how good it
-    // looks. Width matters most, frame rate next, palette least.
+    // every combination of width, frame rate and palette, ranked by how good it
+    // looks. width matters most, frame rate next, palette least.
     const rungs = [];
     for (const ws of [1, 0.85, 0.7, 0.6, 0.5, 0.42, 0.35, 0.3, 0.25, 0.2, 0.16, 0.12, 0.09, 0.07, 0.05]) {
       for (const fs of [1, 0.8, 0.6, 0.5, 0.4, 0.3, 0.22, 0.15]) {
@@ -559,13 +559,13 @@ export async function compressGif(file, targetBytes, opts, report) {
         '[a]palettegen=max_colors=' + rung.colors + ':stats_mode=diff[p];' +
         '[b][p]paletteuse=dither=bayer:bayer_scale=3:diff_mode=rectangle';
       const code = await execChecked(f, ['-hide_banner', '-y', '-i', inName, '-vf', vf, '-loop', '0', 'out.gif']);
-      if (code !== 0) throw new Error('FFmpeg could not build a GIF from this file');
+      if (code !== 0) throw new Error('ffmpeg could not build a gif from this file');
       const data = await f.readFile('out.gif');
       const size = data.length ?? data.byteLength;
       return { size, blob: toBlob(data, 'image/gif') };
     };
 
-    // Size falls as quality falls, so binary search the ranking for the best rung that fits.
+    // size falls as quality falls, so binary search the ranking for the best rung that fits.
     let lo = 0, hi = rungs.length - 1, best = null, smallest = null, step = 0;
     const STEPS = Math.ceil(Math.log2(rungs.length)) + 1;
     while (lo <= hi) {
@@ -582,7 +582,7 @@ export async function compressGif(file, targetBytes, opts, report) {
 
     await safeDelete(f, 'out.gif');
     if (!best) {
-      const err = new Error('even the smallest GIF settings stay above that target');
+      const err = new Error('even the smallest gif settings stay above that target');
       err.smallest = smallest;
       throw err;
     }

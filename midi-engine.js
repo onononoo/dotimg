@@ -1,7 +1,7 @@
-// MIDI compression.
+// midi compression.
 //
-// A .mid file holds a score, not audio, so there is no codec to turn down and
-// FFmpeg cannot read it at all. Size comes from the number of events and how many
+// a .mid file holds a score, not audio, so there is no codec to turn down and
+// ffmpeg cannot read it at all. size comes from the number of events and how many
 // bytes each one costs, so this parses the file and rewrites it: throwing away
 // text and padding first, then re-encoding what is left as compactly as the
 // format allows, and only then dropping musical detail.
@@ -9,7 +9,7 @@
 const HEADER = [0x4d, 0x54, 0x68, 0x64]; // "MThd"
 const TRACK = [0x4d, 0x54, 0x72, 0x6b];  // "MTrk"
 
-// Meta events that change how the file sounds. Everything else is names,
+// meta events that change how the file sounds. everything else is names,
 // lyrics, copyright text and cue markers, which cost bytes and sound like nothing.
 const KEEP_META = new Set([0x2f, 0x51, 0x58, 0x59]); // end of track, tempo, time sig, key sig
 
@@ -38,10 +38,10 @@ function writeVarlen(out, value) {
   for (let i = stack.length - 1; i >= 0; i--) out.push(stack[i]);
 }
 
-/** Parse a standard MIDI file into absolute-tick events. */
+/** parse a standard midi file into absolute-tick events. */
 export function parseMidi(bytes) {
   const r = new Reader(bytes);
-  if (!r.tag(HEADER)) throw new Error('not a MIDI file (no MThd header)');
+  if (!r.tag(HEADER)) throw new Error('not a midi file (no mthd header)');
   const headerLen = r.u32();
   const format = r.u16();
   const trackCount = r.u16();
@@ -61,9 +61,9 @@ export function parseMidi(bytes) {
       tick += r.varlen();
       let b = r.byte();
       if (b < 0x80) {
-        // Running status: reuse the last status byte. There not being one means the
+        // running status: reuse the last status byte. there not being one means the
         // track opened mid-message, so the bytes from here on are meaningless.
-        if (!status) throw new Error('this MIDI file is corrupt (a track starts mid-message)');
+        if (!status) throw new Error('this midi file is corrupt (a track starts mid-message)');
         r.i--;
         b = status;
       } else if (b < 0xf0) {
@@ -88,17 +88,17 @@ export function parseMidi(bytes) {
     r.i = end;
     tracks.push(events);
   }
-  if (!tracks.length) throw new Error('this MIDI file has no tracks');
+  if (!tracks.length) throw new Error('this midi file has no tracks');
   return { format, division, tracks };
 }
 
-/** Rewrite the score under a set of reductions and return the bytes. */
+/** rewrite the score under a set of reductions and return the bytes. */
 export function renderMidi(song, opts) {
   const smpte = (song.division & 0x8000) !== 0;
   const divScale = smpte ? 1 : (opts.divisionScale || 1);
   const division = smpte ? song.division : Math.max(1, Math.round(song.division / divScale));
 
-  // One merged track is both smaller and lets running status run across the whole file.
+  // one merged track is both smaller and lets running status run across the whole file.
   let events = [];
   for (const track of song.tracks) events = events.concat(track);
   events.sort((x, y) => x.tick - y.tick);
@@ -109,7 +109,7 @@ export function renderMidi(song, opts) {
   let sounding = 0;
   let noteIndex = 0;
   let kept = 0;
-  // Pending count per pitch, so a note-off is dropped exactly when its note-on was.
+  // pending count per pitch, so a note-off is dropped exactly when its note-on was.
   const dropped = new Map();
 
   for (const ev of events) {
@@ -126,8 +126,8 @@ export function renderMidi(song, opts) {
         if (opts.dropAllControl) continue;
         if (opts.dropMinorControl && a !== 7 && a !== 10 && a !== 64 && a !== 11) continue;
       }
-      // Thin the notes themselves: a polyphony cap first, then a stride that keeps
-      // one note in every N. Both need the matching note-off dropped as well.
+      // thin the notes themselves: a polyphony cap first, then a stride that keeps
+      // one note in every n. both need the matching note-off dropped as well.
       const isOn = hi === 0x90 && ev.b > 0;
       const isOff = hi === 0x80 || (hi === 0x90 && ev.b === 0);
       if (isOn || isOff) {
@@ -160,7 +160,7 @@ export function renderMidi(song, opts) {
       status = -1; // meta events reset running status
     } else {
       let { hi, channel, a, b } = ev;
-      // A note off is one byte cheaper as a note on with zero velocity, and it keeps
+      // a note off is one byte cheaper as a note on with zero velocity, and it keeps
       // the running status chain unbroken through every note in the file.
       if (hi === 0x80) { hi = 0x90; b = 0; }
       const st = hi | channel;
@@ -186,7 +186,7 @@ export function renderMidi(song, opts) {
   return file;
 }
 
-/** Note count per channel, used to decide which parts to sacrifice first. */
+/** note count per channel, used to decide which parts to sacrifice first. */
 function channelWeights(song) {
   const notes = new Map();
   for (const track of song.tracks) {
@@ -200,14 +200,14 @@ function channelWeights(song) {
 }
 
 /**
- * Compress a MIDI file to a byte target by applying progressively harsher
+ * compress a midi file to a byte target by applying progressively harsher
  * reductions, stopping at the first one that fits.
  */
 export async function compressMidi(file, targetBytes, report) {
   const song = parseMidi(new Uint8Array(await file.arrayBuffer()));
   const sparsest = channelWeights(song);
 
-  // Ordered least to most destructive. The first few change nothing audible.
+  // ordered least to most destructive. the first few change nothing audible.
   const levels = [
     { label: 'stripped text and re-packed', opts: {} },
     { label: 'without aftertouch', opts: { dropAftertouch: true } },
@@ -226,12 +226,12 @@ export async function compressMidi(file, targetBytes, report) {
     levels.push({ label: voices === 1 ? 'one note at a time' : voices + ' voices at once',
       opts: { ...bare, maxVoices: voices } });
   }
-  // Thin the melody itself before giving up whole parts: one note in N still plays.
+  // thin the melody itself before giving up whole parts: one note in n still plays.
   for (const stride of [2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64]) {
     levels.push({ label: 'one note in every ' + stride,
       opts: { ...bare, maxVoices: 1, noteStride: stride } });
   }
-  // Last resort, and never the final part: a file with no notes is not music.
+  // last resort, and never the final part: a file with no notes is not music.
   for (let n = 1; n < sparsest.length; n++) {
     levels.push({ label: 'dropped ' + n + ' of ' + sparsest.length + ' parts',
       opts: { ...bare, maxVoices: 1, noteStride: 64, dropChannels: new Set(sparsest.slice(0, n)) } });

@@ -1,133 +1,134 @@
-# dotimg, runs completely in YOUR browser.
+# dotimg, runs completely in **your** browser.
 
-Compress any image, video, GIF, music or audio file down to a file size you name, in the
-browser. Nothing is uploaded: decoding and encoding happen on the machine that opens the page.
+compress any image, video, gif, music or audio file down to a file size you name, in the
+browser. nothing is uploaded: decoding and encoding happen on the machine that opens the page.
 
-## Running it locally
+## running it locally
 
-Double click `start.bat`, or serve the folder any other way:
+double click `start.bat`, or serve the folder any other way:
 
 ```bash
 python -m http.server 8137
 ```
 
-Then open http://localhost:8137. It must be served over `http://`, not opened as a `file://`
-path, because the page uses ES modules and a web worker.
+then open http://localhost:8137. it must be served over `http://`, not opened as a `file://`
+path, because the page uses es modules and a web worker.
 
-## Using it
+## using it
 
-One file at a time. Choose a file, or drop it on the page, or paste it. The page works out what
+one file at a time. choose a file, or drop it on the page, or paste it. the page works out what
 it is and offers only the formats that belong to the same family, so music converts to music,
-video to video, and a picture to a picture. Type a target size, pick a unit from bytes to
-gigabytes, and press Compress.
+video to video, and a picture to a picture. type a target size, pick a unit from bytes to
+gigabytes, and press compress.
 
-The target is a ceiling, not a goal. A file already under it is left untouched, and a result is
+the target is a ceiling, not a goal. a file already under it is left untouched, and a result is
 never larger than the file that went in.
 
-## Supported formats
+## supported formats
 
-Every extension below was generated as a real file and run through the pipeline.
+every extension below was generated as a real file and run through the pipeline.
 
-| Detected as | Reads | Converts to |
+| detected as | reads | converts to |
 | --- | --- | --- |
-| Music or audio | `.mp3` `.wav` `.aac` `.flac` `.ogg` `.m4a` `.wma` `.alac` `.aiff` `.opus` | the same ten |
-| MIDI | `.mid` | MIDI only |
-| Still picture | `.jpg` `.jpeg` `.png` `.bmp` `.webp` `.tiff` `.svg` `.ico` | JPEG, PNG, WebP, AVIF, GIF, BMP, TIFF, ICO |
-| Animation | `.gif`, animated `.webp` and `.png` | GIF, MP4, WebM, MKV, MOV, AVI |
-| Video | `.mp4` `.m4v` `.mov` `.avi` `.mkv` `.webm` `.flv` `.wmv` `.3gp` `.mpeg` `.ogv` | MP4, WebM, MKV, MOV, AVI |
-| Refused, with a reason | `.heic` `.raw` | nothing |
+| music or audio | `.mp3` `.wav` `.aac` `.flac` `.ogg` `.m4a` `.wma` `.alac` `.aiff` `.opus` | the same ten |
+| midi | `.mid` | midi only |
+| still picture | `.jpg` `.jpeg` `.png` `.bmp` `.webp` `.tiff` `.svg` `.ico` | jpeg, png, webp, avif, gif, bmp, tiff, ico |
+| animation | `.gif`, animated `.webp` and `.png` | gif, mp4, webm, mkv, mov, avi |
+| video | `.mp4` `.m4v` `.mov` `.avi` `.mkv` `.webm` `.flv` `.wmv` `.3gp` `.mpeg` `.ogv` | mp4, webm, mkv, mov, avi |
+| refused, with a reason | `.heic` `.raw` | nothing |
 
-A MIDI file can only stay MIDI. It stores notes rather than sound, so turning it into MP3 would
-need a synthesiser, and going the other way would need transcription. SVG is read but never
-written, because a drawing cannot be rebuilt once it is flattened into pixels. AVIF is offered
+a midi file can only stay midi. it stores notes rather than sound, so turning it into mp3 would
+need a synthesiser, and going the other way would need transcription. svg is read but never
+written, because a drawing cannot be rebuilt once it is flattened into pixels. avif is offered
 only when the browser can encode it.
 
-## What it does
+## what it does
 
-**Images** are decoded by the browser, so every still format it reads is accepted. The encoder
-measures one encode, predicts the scale that would hit the target, and re-measures. It holds
+**images** are decoded by the browser, so every still format it reads is accepted. the encoder
+measures one encode, predicts the scale that would hit the target, and re-measures. it holds
 quality at 62 or above and shrinks the frame rather than smearing the picture, dropping below
-that floor only when the target leaves no choice. Formats the browser cannot open, such as TIFF,
-are decoded by FFmpeg first. GIF, BMP, TIFF and ICO cannot be written by a canvas either, so
-each measurement in the search goes out to FFmpeg as a PNG and comes back in the real format.
-Those four store pixels more or less as they are, so they need much smaller dimensions than JPEG
-or WebP to reach the same target.
+that floor only when the target leaves no choice. formats the browser cannot open, such as tiff,
+are decoded by ffmpeg first. gif, bmp, tiff and ico cannot be written by a canvas either, so
+each measurement in the search goes out to ffmpeg as a png and comes back in the real format.
+those four store pixels more or less as they are, so they need much smaller dimensions than jpeg
+or webp to reach the same target.
 
-**Video** goes through FFmpeg compiled to WebAssembly. The target becomes a bitrate budget from
+**video** goes through ffmpeg compiled to webassembly. the target becomes a bitrate budget from
 the real duration; audio gets a floor of its own or is dropped when the budget is too thin, and
-resolution and frame rate fall when there are not enough bits per pixel. The encode repeats with
+resolution and frame rate fall when there are not enough bits per pixel. the encode repeats with
 a corrected bitrate until the output lands under the target.
 
-**Music and audio** are bitrate targeted the same way for the lossy codecs, dropping to mono and
+**music and audio** are bitrate targeted the same way for the lossy codecs, dropping to mono and
 a lower sample rate as the budget tightens, with each rate snapped to one its encoder actually
-accepts. The lossless formats have no bitrate knob, so sample rate, channels and bit depth are
+accepts. the lossless formats have no bitrate knob, so sample rate, channels and bit depth are
 ranked by fidelity and binary searched instead.
 
-**Animations** are rebuilt with a generated palette. Width, frame rate and palette size are
+**animations** are rebuilt with a generated palette. width, frame rate and palette size are
 ranked by how good each combination looks, and a binary search over that ranking finds the best
 one that fits.
 
-**MIDI** is a score rather than a recording, so FFmpeg cannot read it and there is no codec to
-turn down. The file is parsed and rewritten: text and names first, then note-offs re-expressed
+**midi** is a score rather than a recording, so ffmpeg cannot read it and there is no codec to
+turn down. the file is parsed and rewritten: text and names first, then note-offs re-expressed
 as zero velocity note-ons so running status compresses the whole file, then aftertouch, pitch
-bend and controllers, then timing resolution, and only then musical detail. It thins notes but
+bend and controllers, then timing resolution, and only then musical detail. it thins notes but
 never returns a silent file.
 
-## Limits
+## limits
 
-- WebM is offered but is not dependable here. Its only codecs are VP8, VP9 and AV1, and the
-  bundled libvpx wants more heap than this single-threaded FFmpeg build can grow to: it encodes
-  a 64 pixel frame and runs out of memory at 160. When that happens the page says so and points
-  at MP4, MKV, MOV or AVI, which all work.
-- HEIC needs Apple's decoder, so it works in Safari and nowhere else; the bundled FFmpeg has no
-  HEIF support. Camera RAW differs per manufacturer and is not developed either. Both are
+- webm is offered but is not dependable here. its only codecs are vp8, vp9 and av1, and the
+  bundled libvpx wants more heap than this single-threaded ffmpeg build can grow to: it encodes
+  a 64 pixel frame and runs out of memory at 160. when that happens the page says so and points
+  at mp4, mkv, mov or avi, which all work.
+- heic needs apple's decoder, so it works in safari and nowhere else; the bundled ffmpeg has no
+  heif support. camera raw differs per manufacturer and is not developed either. both are
   refused with an explanation, not a silent failure.
-- Every format has a size floor from its own headers. In Chrome that is roughly 760 bytes for
-  JPEG and 540 for WebP no matter how small the picture, which is why PNG is used for targets
-  under a few kilobytes. Lossy audio encoders have a minimum bitrate, so a tiny target on a long
-  track cannot be met. In each case the page reports the floor and offers the smallest file it
+- every format has a size floor from its own headers. in chrome that is roughly 760 bytes for
+  jpeg and 540 for webp no matter how small the picture, which is why png is used for targets
+  under a few kilobytes. lossy audio encoders have a minimum bitrate, so a tiny target on a long
+  track cannot be met. in each case the page reports the floor and offers the smallest file it
   managed.
-- FFmpeg here is the single-threaded build, so it needs no special server headers but encodes at
-  maybe a quarter of native speed. Long videos take minutes.
-- Its heap grows with every run and never fully returns it, so a long session can eventually
-  trap. The engine restarts itself and the page quietly tries the same job once more, so this is
+- ffmpeg here is the single-threaded build, so it needs no special server headers but encodes at
+  maybe a quarter of native speed. long videos take minutes.
+- its heap grows with every run and never fully returns it, so a long session can eventually
+  trap. the engine restarts itself and the page quietly tries the same job once more, so this is
   usually invisible.
-- DRM-protected media cannot be read at all.
+- drm-protected media cannot be read at all.
 
-## Deploying it
+## deploying it
 
-`vendor/core/ffmpeg-core.wasm` is 32 MB, which is over the 25 MB per-file limit on
-Cloudflare Pages and several other static hosts, so it is gitignored and never uploaded.
-The page checks for it at load: when the file really is there it is used, and when it is
-missing the identical build is fetched from `cdn.jsdelivr.net` instead. That is why the
+`vendor/core/ffmpeg-core.wasm` is 32 mb, which is over the 25 mb per-file limit on
+cloudflare pages and several other static hosts, so it is gitignored and never uploaded.
+the page checks for it at load: when the file really is there it is used, and when it is
+missing the identical build is fetched from `cdn.jsdelivr.net` instead. that is why the
 site works locally, where the file exists on disk, and also works deployed, where it does
 not.
 
-Getting this wrong is what produces `CompileError: WebAssembly.instantiate(): BufferSource
-argument is empty`: the browser downloaded a 404 page instead of the binary.
+getting this wrong is what produces `CompileError: WebAssembly.instantiate(): BufferSource
+argument is empty`, quoted here exactly as the browser prints it: the browser downloaded a
+404 page instead of the binary.
 
-If you would rather not depend on the CDN, host the file somewhere with no size limit and
-point `CORE_WASM_CDN` in `media-engine.js` at it. It must be the `@ffmpeg/core@0.12.6`
+if you would rather not depend on the cdn, host the file somewhere with no size limit and
+point `CORE_WASM_CDN` in `media-engine.js` at it. it must be the `@ffmpeg/core@0.12.6`
 build, because the loader beside it is that version and the two must match.
 
-## Layout
+## layout
 
-| File | Role |
+| file | role |
 | --- | --- |
-| `index.html` | The whole page, about 80 lines, with no stylesheet |
-| `app.js` | File typing, the format lists, routing and UI wiring |
-| `image-engine.js` | Still-image scale and quality search |
-| `media-engine.js` | FFmpeg loading and recycling, video, audio and GIF searches |
-| `midi-engine.js` | MIDI parser, rewriter and reduction ladder |
-| `vendor/` | FFmpeg WebAssembly build; the 32 MB core is gitignored and falls back to a CDN |
+| `index.html` | the whole page, about 80 lines, with no stylesheet |
+| `app.js` | file typing, the format lists, routing and ui wiring |
+| `image-engine.js` | still-image scale and quality search |
+| `media-engine.js` | ffmpeg loading and recycling, video, audio and gif searches |
+| `midi-engine.js` | midi parser, rewriter and reduction ladder |
+| `vendor/` | ffmpeg webassembly build; the 32 mb core is gitignored and falls back to a cdn |
 
-`vendor/` is a copy of `@ffmpeg/ffmpeg` 0.12.10 and `@ffmpeg/core` 0.12.6. The JavaScript is
+`vendor/` is a copy of `@ffmpeg/ffmpeg` 0.12.10 and `@ffmpeg/core` 0.12.6. the javascript is
 served from this origin because browsers refuse to start a worker from a cross-origin script.
-The 32 MB core binary is the one exception, for the size reason above.
+the 32 mb core binary is the one exception, for the size reason above.
 
-## Source and donations
+## source and donations
 
-Source code: https://github.com/onononoo/dotimg
+source code: https://github.com/onononoo/dotimg
 
 this project is open source, so please donate to keep it up :) ! btc: bc1qs4z04ltddh6vaqd4stu3p4vekv253ht4cwqma4
 cicada 3301

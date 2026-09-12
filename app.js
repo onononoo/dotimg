@@ -5,13 +5,13 @@ import { compressMidi } from './midi-engine.js';
 
 const $ = id => document.getElementById(id);
 
-/** The one file being worked on. */
+/** the one file being worked on. */
 let current = null;
 let busy = false;
 
 /* ---------- formats ---------- */
 
-// Every extension the app handles, mapped to the engine family that takes it.
+// every extension the app handles, mapped to the engine family that takes it.
 const EXT_KIND = {
   // audio
   mp3: 'audio', wav: 'audio', aac: 'audio', flac: 'audio', ogg: 'audio', oga: 'audio',
@@ -31,7 +31,7 @@ const EXT_KIND = {
   gif: 'anim', webp: 'maybe-anim', apng: 'maybe-anim',
 };
 
-// Still formats the canvas itself can write.
+// still formats the canvas itself can write.
 const CANVAS_IMAGE = {
   jpg: 'image/jpeg',
   png: 'image/png',
@@ -39,7 +39,7 @@ const CANVAS_IMAGE = {
   avif: 'image/avif',
 };
 
-// What each family may be converted into. A file only ever offers its own family,
+// what each family may be converted into. a file only ever offers its own family,
 // so music stays music, video stays video, and a picture stays a picture.
 const FAMILY = {
   audio: ['mp3', 'wav', 'aac', 'flac', 'ogg', 'm4a', 'wma', 'alac', 'aiff', 'opus'],
@@ -50,29 +50,29 @@ const FAMILY = {
 };
 
 const LABELS = {
-  mp3: 'MP3', wav: 'WAV', aac: 'AAC', flac: 'FLAC (lossless)', ogg: 'OGG Vorbis',
-  m4a: 'M4A (AAC)', wma: 'WMA', alac: 'ALAC (lossless)', aiff: 'AIFF', opus: 'Opus',
-  mid: 'MIDI',
-  jpg: 'JPEG', png: 'PNG (lossless)', webp: 'WebP', avif: 'AVIF',
-  gif: 'GIF', bmp: 'BMP', tiff: 'TIFF', ico: 'ICO (icon, 256px max)',
-  mp4: 'MP4 (H.264)', webm: 'WebM (VP9)', mkv: 'MKV (H.264)', mov: 'MOV (H.264)',
-  avi: 'AVI (MPEG-4)',
+  mp3: 'mp3', wav: 'wav', aac: 'aac', flac: 'flac (lossless)', ogg: 'ogg vorbis',
+  m4a: 'm4a (aac)', wma: 'wma', alac: 'alac (lossless)', aiff: 'aiff', opus: 'opus',
+  mid: 'midi',
+  jpg: 'jpeg', png: 'png (lossless)', webp: 'webp', avif: 'avif',
+  gif: 'gif', bmp: 'bmp', tiff: 'tiff', ico: 'ico (icon, 256px max)',
+  mp4: 'mp4 (h.264)', webm: 'webm (vp9)', mkv: 'mkv (h.264)', mov: 'mov (h.264)',
+  avi: 'avi (mpeg-4)',
 };
 
-// Extensions that mean the same format under a different spelling.
+// extensions that mean the same format under a different spelling.
 const SAME_AS = {
   jpeg: 'jpg', jfif: 'jpg', tif: 'tiff', midi: 'mid', rmi: 'mid',
   aif: 'aiff', aifc: 'aiff', m4v: 'mp4', oga: 'ogg', mpg: 'mpeg',
 };
 
 const KIND_NAME = {
-  audio: 'music or audio', midi: 'MIDI score', image: 'still picture',
+  audio: 'music or audio', midi: 'midi score', image: 'still picture',
   anim: 'animation', video: 'video',
 };
 
 /* ---------- helpers ---------- */
 
-const UNITS = [['GB', 1e9], ['MB', 1e6], ['KB', 1e3]];
+const UNITS = [['gb', 1e9], ['mb', 1e6], ['kb', 1e3]];
 
 function fmtBytes(n) {
   if (n == null) return '-';
@@ -104,7 +104,7 @@ function kindOf(file) {
   return 'image';
 }
 
-/** WebP and PNG can be animated; sniff the bytes rather than trusting the extension. */
+/** webp and png can be animated; sniff the bytes rather than trusting the extension. */
 async function isAnimated(file) {
   const head = new Uint8Array(await file.slice(0, 4096).arrayBuffer());
   const ascii = String.fromCharCode(...head.slice(0, 64));
@@ -114,7 +114,7 @@ async function isAnimated(file) {
     }
     return false;
   }
-  if (head[0] === 0x89 && head[1] === 0x50) { // PNG: look for acTL
+  if (head[0] === 0x89 && head[1] === 0x50) { // png: look for actl
     for (let i = 8; i < head.length - 4; i++) {
       if (head[i] === 0x61 && head[i+1] === 0x63 && head[i+2] === 0x54 && head[i+3] === 0x4C) return true;
     }
@@ -123,18 +123,18 @@ async function isAnimated(file) {
   return false;
 }
 
-/** Say why a picture could not be opened, in terms the person can act on. */
+/** say why a picture could not be opened, in terms the person can act on. */
 function undecodableReason(file) {
   const ext = extOf(file);
   if (['heic', 'heif'].includes(ext)) {
-    return 'HEIC needs Apple’s decoder. It works in Safari, but no other browser can read ' +
-           'it and the bundled FFmpeg has no HEIF support. Export it as JPEG first.';
+    return 'heic needs apple’s decoder. it works in safari, but no other browser can read ' +
+           'it and the bundled ffmpeg has no heif support. export it as jpeg first.';
   }
   if (['raw', 'dng', 'cr2', 'nef', 'arw', 'orf', 'rw2'].includes(ext)) {
-    return 'camera RAW is laid out differently by every manufacturer, and neither this browser ' +
-           'nor the bundled FFmpeg can develop it. Export a JPEG or TIFF from your photo app first.';
+    return 'camera raw is laid out differently by every manufacturer, and neither this browser ' +
+           'nor the bundled ffmpeg can develop it. export a jpeg or tiff from your photo app first.';
   }
-  return 'neither this browser nor the bundled FFmpeg can decode ' + (ext ? '.' + ext : 'this file');
+  return 'neither this browser nor the bundled ffmpeg can decode ' + (ext ? '.' + ext : 'this file');
 }
 
 function setStatus(text) { $('status').textContent = text; }
@@ -156,7 +156,7 @@ async function pick(file, extraNote) {
   $('dName').textContent = file.name || 'untitled';
   $('dKind').textContent = KIND_NAME[kind] + (file.type ? ' (' + file.type + ')' : '');
   $('dSize').textContent = fmtBytes(file.size);
-  $('dExtraLabel').textContent = 'Details';
+  $('dExtraLabel').textContent = 'details';
   $('dExtra').textContent = 'reading...';
 
   buildFormatList(kind, normalExt(file), extOf(file));
@@ -167,7 +167,7 @@ async function pick(file, extraNote) {
   describe(current);
 }
 
-// Whether this browser can write AVIF. The probe is slow enough to notice, so it runs
+// whether this browser can write avif. the probe is slow enough to notice, so it runs
 // once at load and the dropdown is built from whatever the answer is by then; if it
 // arrives late, the option is added to the list already on screen.
 let avifOK = false;
@@ -178,8 +178,8 @@ supportsEncode('image/avif').then(ok => {
   }
 });
 
-/** Fill the dropdown with this family only, defaulting to what the file already is.
- *  `keepChoice` is for rebuilding the list under a file already on screen, where the
+/** fill the dropdown with this family only, defaulting to what the file already is.
+ *  `keepchoice` is for rebuilding the list under a file already on screen, where the
  *  person may have chosen something already. */
 function buildFormatList(kind, same, rawExt, keepChoice) {
   const sel = $('outFormat');
@@ -187,7 +187,7 @@ function buildFormatList(kind, same, rawExt, keepChoice) {
   sel.innerHTML = '';
 
   for (const key of FAMILY[kind] || FAMILY.image) {
-    if (key === 'avif' && !avifOK) continue; // this browser has no AVIF encoder
+    if (key === 'avif' && !avifOK) continue; // this browser has no avif encoder
     const opt = document.createElement('option');
     opt.value = key;
     opt.textContent = LABELS[key] || key.toUpperCase();
@@ -200,20 +200,20 @@ function buildFormatList(kind, same, rawExt, keepChoice) {
 
   const note = $('formatNote');
   if (kind === 'midi') {
-    note.textContent = 'A MIDI file stores notes rather than sound, so it can only stay MIDI. ' +
-      'Turning it into MP3 would need a synthesiser.';
+    note.textContent = 'a midi file stores notes rather than sound, so it can only stay midi. ' +
+      'turning it into mp3 would need a synthesiser.';
   } else if (rawExt === 'svg') {
-    note.textContent = 'SVG can be read but not written back: a drawing cannot be rebuilt once ' +
+    note.textContent = 'svg can be read but not written back: a drawing cannot be rebuilt once ' +
       'it has been flattened into pixels.';
   } else if (kind === 'anim') {
-    note.textContent = 'Converting an animation to MP4 or WebM is usually many times smaller ' +
-      'than keeping it a GIF.';
+    note.textContent = 'converting an animation to mp4 or webm is usually many times smaller ' +
+      'than keeping it a gif.';
   } else {
     note.textContent = '';
   }
 }
 
-/** Start the target box at a tenth of the file rather than at 1 MB for everything. */
+/** start the target box at a tenth of the file rather than at 1 mb for everything. */
 function suggestTarget(file) {
   const tenth = Math.max(1, Math.round(file.size / 10));
   let unit = 1000000, value = tenth / 1000000;
@@ -223,7 +223,7 @@ function suggestTarget(file) {
   $('targetValue').value = String(Math.max(1, Math.round(value * 10) / 10));
 }
 
-/** Fill in the details row: dimensions for pictures, a note for everything else. */
+/** fill in the details row: dimensions for pictures, a note for everything else. */
 async function describe(item) {
   const cell = $('dExtra');
   if (item.kind === 'midi') {
@@ -235,14 +235,14 @@ async function describe(item) {
     return;
   }
   try {
-    $('dExtraLabel').textContent = 'Dimensions';
+    $('dExtraLabel').textContent = 'dimensions';
     const bmp = await decodeImage(item.file);
     item.decodable = true;
     cell.textContent = bmp.width + ' x ' + bmp.height + ' pixels';
     bmp.close?.();
   } catch {
     item.decodable = false;
-    cell.textContent = 'no preview: this browser cannot read it, FFmpeg will be tried instead';
+    cell.textContent = 'no preview: this browser cannot read it, ffmpeg will be tried instead';
   }
 }
 
@@ -258,25 +258,25 @@ async function run() {
   if (busy || !current) return;
   const target = readTarget();
   $('output').hidden = false;
-  if (!target) { setStatus('Type a target size first.'); return; }
+  if (!target) { setStatus('type a target size first.'); return; }
 
   const item = current;
   const out = $('outFormat').value;
-  if (!out) { setStatus('Give the format list a moment to fill in, then try again.'); return; }
+  if (!out) { setStatus('give the format list a moment to fill in, then try again.'); return; }
   busy = true;
   $('go').disabled = true;
   $('result').textContent = '';
-  setStatus('Working...');
+  setStatus('working...');
   const started = performance.now();
 
   try {
     try {
       await attempt(item, out, target, started);
     } catch (err) {
-      // FFmpeg's heap can trap on a long session. It restarts itself, so the honest
+      // ffmpeg's heap can trap on a long session. it restarts itself, so the honest
       // thing is to quietly try the same job once more rather than blame the file.
       if (!/restarted/.test(err.message || '')) throw err;
-      setStatus('The engine restarted itself. Trying once more...');
+      setStatus('the engine restarted itself. trying once more...');
       await attempt(item, out, target, performance.now());
     }
   } catch (err) {
@@ -288,22 +288,22 @@ async function run() {
 }
 
 async function attempt(item, out, target, started) {
-  // A target is a ceiling, not a quota: leave a file alone when it already fits and
+  // a target is a ceiling, not a quota: leave a file alone when it already fits and
   // the format is not changing.
   if (item.file.size <= target && out === normalExt(item.file)) {
     finish(item, item.file, extOf(item.file) || 'bin', started, 'already under your target');
     return;
   }
 
-  // Converting with room to spare should still shrink the file, never grow it.
+  // converting with room to spare should still shrink the file, never grow it.
   const budget = Math.min(target, item.file.size);
 
   const report = {
-    state: s => setStatus('Engine: ' + s),
-    step: (i, n, label) => setStatus('Working: ' + label),
+    state: s => setStatus('engine: ' + s),
+    step: (i, n, label) => setStatus('working: ' + label),
   };
   onProgress(p => {
-    if (busy && p > 0 && p < 1) setStatus('Working: ' + Math.round(p * 100) + '%');
+    if (busy && p > 0 && p < 1) setStatus('working: ' + Math.round(p * 100) + '%');
   });
 
   if (item.kind === 'midi') {
@@ -313,7 +313,7 @@ async function attempt(item, out, target, started) {
   }
 
   if (item.kind === 'audio') {
-    if (!engineLoaded()) setStatus('Loading the audio engine. This happens once.');
+    if (!engineLoaded()) setStatus('loading the audio engine. this happens once.');
     const r = await compressAudio(item.file, budget, { format: out }, report);
     finish(item, r.blob, r.container, started, Math.round(r.duration) +
       ' seconds at about ' + Math.round(r.size * 8 / r.duration / 1000) + ' kbps');
@@ -326,8 +326,8 @@ async function attempt(item, out, target, started) {
     return;
   }
 
-  // Animation or video from here on.
-  if (!engineLoaded()) setStatus('Loading the video engine. This happens once.');
+  // animation or video from here on.
+  if (!engineLoaded()) setStatus('loading the video engine. this happens once.');
 
   if (out === 'gif') {
     const r = await compressGif(item.file, budget, {}, report);
@@ -341,12 +341,12 @@ async function attempt(item, out, target, started) {
     ' seconds at about ' + Math.round(r.size * 8 / r.duration / 1000) + ' kbps');
 }
 
-/** Still pictures: the canvas writes most formats and FFmpeg writes the rest. */
+/** still pictures: the canvas writes most formats and ffmpeg writes the rest. */
 async function compressStill(item, out, budget, report) {
   let source = item.file;
 
   if (item.decodable === false) {
-    setStatus('This browser cannot read that picture. Trying FFmpeg instead...');
+    setStatus('this browser cannot read that picture. trying ffmpeg instead...');
     try {
       source = await decodeStillViaFFmpeg(item.file, report);
     } catch {
@@ -354,7 +354,7 @@ async function compressStill(item, out, budget, report) {
     }
   }
 
-  const onStep = (p, label) => setStatus('Trying ' + label + '...');
+  const onStep = (p, label) => setStatus('trying ' + label + '...');
 
   if (CANVAS_IMAGE[out]) {
     const r = await compressImage(source, budget, CANVAS_IMAGE[out], onStep);
@@ -365,8 +365,8 @@ async function compressStill(item, out, budget, report) {
 
   if (!FFMPEG_STILL_FORMATS[out]) throw new Error('unknown output format: ' + out);
 
-  // GIF, BMP, TIFF and ICO: the canvas cannot write these, so every measurement in the
-  // search goes out to FFmpeg as a PNG and comes back in the real format.
+  // gif, bmp, tiff and ico: the canvas cannot write these, so every measurement in the
+  // search goes out to ffmpeg as a png and comes back in the real format.
   const bitmap = await decodeImage(source);
   try {
     const r = await fitImageVia(bitmap, budget,
@@ -386,14 +386,14 @@ function finish(item, blob, ext, started, detail) {
     : pct < 0 ? Math.abs(pct) + '% larger'
     : 'the same size';
 
-  setStatus('Done in ' + secs + ' seconds.');
+  setStatus('done in ' + secs + ' seconds.');
 
   const base = (item.file.name || 'output').replace(/\.[^.]+$/, '');
   const name = base + '.dotimg.' + ext;
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
   link.download = name;
-  link.textContent = 'Download ' + name;
+  link.textContent = 'download ' + name;
 
   const size = document.createElement('b');
   size.textContent = fmtBytes(blob.size);
@@ -404,7 +404,7 @@ function finish(item, blob, ext, started, detail) {
 }
 
 function failed(err) {
-  setStatus('Could not do it: ' + (err.message || String(err)));
+  setStatus('could not do it: ' + (err.message || String(err)));
   $('result').textContent = '';
 
   const closest = err.smallest;
@@ -413,8 +413,8 @@ function failed(err) {
   const link = document.createElement('a');
   link.href = URL.createObjectURL(closest.blob);
   link.download = 'smallest-possible';
-  link.textContent = 'Download that instead';
-  $('result').append('The smallest this could get is ' + fmtBytes(closest.size) + '. ', link);
+  link.textContent = 'download that instead';
+  $('result').append('the smallest this could get is ' + fmtBytes(closest.size) + '. ', link);
 }
 
 /* ---------- wiring ---------- */
@@ -426,7 +426,7 @@ $('picker').addEventListener('change', () => {
 
 $('go').addEventListener('click', run);
 
-// Dropping and pasting still work. They simply fill the same file box.
+// dropping and pasting still work. they simply fill the same file box.
 function adopt(file, note) {
   const dt = new DataTransfer();
   dt.items.add(file);
@@ -440,7 +440,7 @@ document.addEventListener('drop', e => {
   const files = [...(e.dataTransfer?.files || [])];
   if (!files.length) return;
   adopt(files[0], files.length > 1
-    ? 'You dropped ' + files.length + ' files. This page works on one at a time, so it took the first.'
+    ? 'you dropped ' + files.length + ' files. this page works on one at a time, so it took the first.'
     : null);
 });
 document.addEventListener('paste', e => {

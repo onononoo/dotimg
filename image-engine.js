@@ -1,4 +1,4 @@
-// Still-image compression: decode with the browser, then search for the highest
+// still-image compression: decode with the browser, then search for the highest
 // quality re-encode that fits under a byte budget.
 
 const LOSSY = new Set(['image/jpeg', 'image/webp', 'image/avif']);
@@ -33,15 +33,15 @@ function encode(canvas, mime, quality) {
   return new Promise(res => canvas.toBlob(res, mime, quality));
 }
 
-/** Hand a canvas's pixels back now rather than waiting for the collector. A full frame
+/** hand a canvas's pixels back now rather than waiting for the collector. a full frame
  *  is several megabytes and a search allocates a fresh one per attempt, which is enough
  *  memory to matter on a large picture. */
 function release(canvas) {
   if (canvas) { canvas.width = 0; canvas.height = 0; }
 }
 
-/** Yield to the event loop between encodes so the page stays responsive.
- *  A message channel rather than a timer: browsers clamp setTimeout to one second
+/** yield to the event loop between encodes so the page stays responsive.
+ *  a message channel rather than a timer: browsers clamp setTimeout to one second
  *  in a background tab, which would stall a search behind a dozen idle seconds. */
 const tick = () => new Promise(resolve => {
   if (typeof MessageChannel === 'undefined') return setTimeout(resolve, 0);
@@ -50,7 +50,7 @@ const tick = () => new Promise(resolve => {
   ch.port2.postMessage(0);
 });
 
-/** Decode any still image the browser understands; falls back to <img> for SVG and oddities. */
+/** decode any still image the browser understands; falls back to <img> for svg and oddities. */
 export async function decodeImage(file) {
   try {
     const bmp = await createImageBitmap(file);
@@ -83,7 +83,7 @@ function drawScaled(bitmap, scale, mime) {
   const ctx = c.getContext('2d');
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
-  if (mime === 'image/jpeg') { // JPEG has no alpha, so composite on white rather than black
+  if (mime === 'image/jpeg') { // jpeg has no alpha, so composite on white rather than black
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, w, h);
   }
@@ -92,11 +92,11 @@ function drawScaled(bitmap, scale, mime) {
 }
 
 /**
- * Largest scale that fits under `targetBytes`, where `measure(canvas)` produces the
- * bytes. File size tracks pixel count, so each measurement predicts the next scale
+ * largest scale that fits under `targetbytes`, where `measure(canvas)` produces the
+ * bytes. file size tracks pixel count, so each measurement predicts the next scale
  * directly; the fit and miss found so far bracket the search and end it early.
- * The measurement is a callback so formats the canvas cannot write, which go out to
- * FFmpeg instead, reuse this same search.
+ * the measurement is a callback so formats the canvas cannot write, which go out to
+ * ffmpeg instead, reuse this same search.
  */
 async function findScale(bitmap, mime, targetBytes, measure, state, onStep) {
   const big = bitmap.width * bitmap.height > 160000;
@@ -131,7 +131,7 @@ async function findScale(bitmap, mime, targetBytes, measure, state, onStep) {
       scale = next;
     } else {
       hi = Math.min(hi, scale);
-      // Every format has a header floor; at one pixel there is nothing left to remove.
+      // every format has a header floor; at one pixel there is nothing left to remove.
       const atFloor = canvas.width <= 1 && canvas.height <= 1;
       release(canvas);                // too big, so this frame is never coming back
       if (atFloor) break;
@@ -148,8 +148,8 @@ async function findScale(bitmap, mime, targetBytes, measure, state, onStep) {
 }
 
 /**
- * Best encode of `bitmap` under `targetBytes`.
- * Returns { blob, width, height, quality, scale } or throws carrying the closest miss.
+ * best encode of `bitmap` under `targetbytes`.
+ * returns { blob, width, height, quality, scale } or throws carrying the closest miss.
  */
 export async function fitImage(bitmap, mime, targetBytes, onStep) {
   const lossy = LOSSY.has(mime);
@@ -165,12 +165,12 @@ export async function fitImage(bitmap, mime, targetBytes, onStep) {
     throw missed(state);
   }
 
-  // Pass one: hold a decent quality floor and shrink the frame to fit.
+  // pass one: hold a decent quality floor and shrink the frame to fit.
   let fit = await findScale(bitmap, mime, targetBytes,
     canvas => encode(canvas, mime, QUALITY_FLOOR), state, onStep);
   let lowQuality = false;
 
-  // Pass two: the target is brutal, so give up the floor and take what fits.
+  // pass two: the target is brutal, so give up the floor and take what fits.
   if (!fit) {
     onStep?.(0.9, 'dropping quality');
     fit = await findScale(bitmap, mime, targetBytes,
@@ -183,7 +183,7 @@ export async function fitImage(bitmap, mime, targetBytes, onStep) {
   const lowBound = lowQuality ? 0.02 : QUALITY_FLOOR;
   let best = fit.blob, bestQ = lowBound;
 
-  // Spend whatever budget is left on quality at the chosen frame size.
+  // spend whatever budget is left on quality at the chosen frame size.
   const top = await encode(canvas, mime, lowQuality ? QUALITY_FLOOR : 0.95);
   state.attempts++;
   if (top.size <= targetBytes) {
@@ -205,9 +205,9 @@ export async function fitImage(bitmap, mime, targetBytes, onStep) {
 }
 
 /**
- * Fit a still format the canvas cannot write. The canvas produces a PNG at each
- * scale and `encodeBlob` turns it into the real format, so the same predictive
- * search applies. These formats have no quality dial, so scale is the only lever.
+ * fit a still format the canvas cannot write. the canvas produces a png at each
+ * scale and `encodeblob` turns it into the real format, so the same predictive
+ * search applies. these formats have no quality dial, so scale is the only lever.
  */
 export async function fitImageVia(bitmap, targetBytes, encodeBlob, onStep) {
   const state = { attempts: 0, smallest: null };
@@ -236,7 +236,7 @@ function missed(state) {
   return err;
 }
 
-/** Try candidate formats and keep the one that preserves the most pixels. */
+/** try candidate formats and keep the one that preserves the most pixels. */
 export async function compressImage(file, targetBytes, formatPref, onStep) {
   const bitmap = await decodeImage(file);
   let candidates;
@@ -245,7 +245,7 @@ export async function compressImage(file, targetBytes, formatPref, onStep) {
     if (await supportsEncode('image/avif')) candidates.push('image/avif');
     if (await supportsEncode('image/webp')) candidates.push('image/webp');
     candidates.push('image/jpeg');
-    // Lossy formats carry a fixed header floor of several hundred bytes; PNG does not,
+    // lossy formats carry a fixed header floor of several hundred bytes; png does not,
     // so it is the only way to reach genuinely tiny targets.
     if (targetBytes < 4096) candidates.push('image/png');
   } else {
@@ -265,7 +265,7 @@ export async function compressImage(file, targetBytes, formatPref, onStep) {
     } catch (e) { lastErr = e; }
   }
 
-  // Nothing fit: PNG has no header floor, so give it a last try before giving up.
+  // nothing fit: png has no header floor, so give it a last try before giving up.
   if (!bestFit && !candidates.includes('image/png')) {
     try {
       const r = await fitImage(bitmap, 'image/png', targetBytes, onStep);
