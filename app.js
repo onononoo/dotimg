@@ -3,6 +3,7 @@ import { compressVideo, compressGif, compressAudio, decodeStillViaFFmpeg, encode
          decodeAnimatedWebp, onProgress, engineLoaded, FFMPEG_STILL_FORMATS } from './media-engine.js';
 import { compressMidi } from './midi-engine.js';
 import { compressText } from './text-engine.js';
+import { compressArchive } from './archive-engine.js';
 
 const $ = id => document.getElementById(id);
 
@@ -36,7 +37,19 @@ const EXT_KIND = {
   srt: 'subtitles', vtt: 'subtitles',
   js: 'code', mjs: 'code', css: 'code', html: 'code', htm: 'code', xml: 'code',
   txt: 'text', md: 'text', markdown: 'text',
+  // archives holding any number of files
+  zip: 'archive', '7z': 'archive', rar: 'archive', tar: 'archive',
+  'tar.gz': 'archive', 'tar.bz2': 'archive', 'tar.xz': 'archive', 'tar.zst': 'archive',
+  tgz: 'archive', tbz2: 'archive', tbz: 'archive', txz: 'archive', tzst: 'archive',
+  iso: 'archive', cab: 'archive', arj: 'archive', lzh: 'archive', lha: 'archive',
+  wim: 'archive', dmg: 'archive', udf: 'archive',
+  // a single compressed file
+  gz: 'stream', bz2: 'stream', xz: 'stream', zst: 'stream', z: 'stream',
 };
+
+// two-part endings that name one format. these are the only multi-dot endings dotimg reads as a
+// unit, so a name like report.final.pdf is never mistaken for one.
+const COMPOUND_EXT = ['tar.gz', 'tar.bz2', 'tar.xz', 'tar.zst'];
 
 // still formats the canvas itself can write.
 const CANVAS_IMAGE = {
@@ -59,10 +72,15 @@ const FAMILY = {
   subtitles: ['srt', 'vtt'],
   code: [],
   text: [],
+  archive: ['zip', '7z', 'tar', 'tar.gz', 'tar.bz2', 'tar.xz'],
+  stream: ['gz', 'bz2', 'xz', 'zip', '7z'],
 };
 
+// kinds 7-zip handles. rar, iso, cab and friends can be read but never written.
+const ARCHIVE_KINDS = new Set(['archive', 'stream']);
+
 // kinds where nothing can be thrown away, so there is a hard floor on size.
-const LOSSLESS = new Set(['data', 'table', 'subtitles', 'code', 'text']);
+const LOSSLESS = new Set(['data', 'table', 'subtitles', 'code', 'text', 'archive', 'stream']);
 
 const LABELS = {
   mp3: 'mp3', wav: 'wav', aac: 'aac', flac: 'flac (lossless)', ogg: 'ogg vorbis',
@@ -76,6 +94,8 @@ const LABELS = {
   srt: 'srt', vtt: 'vtt (webvtt)', js: 'js (minified)', mjs: 'mjs (minified)',
   css: 'css (minified)', html: 'html (minified)', xml: 'xml (minified)',
   txt: 'txt', md: 'md (markdown)', svg: 'svg (minified)',
+  zip: 'zip', '7z': '7z (smallest)', tar: 'tar (uncompressed)', 'tar.gz': 'tar.gz',
+  'tar.bz2': 'tar.bz2', 'tar.xz': 'tar.xz', gz: 'gz (gzip)', bz2: 'bz2 (bzip2)', xz: 'xz',
 };
 
 // extensions that mean the same format under a different spelling.
@@ -83,6 +103,7 @@ const SAME_AS = {
   jpeg: 'jpg', jfif: 'jpg', tif: 'tiff', midi: 'mid', rmi: 'mid',
   aif: 'aiff', aifc: 'aiff', m4v: 'mp4', oga: 'ogg', mpg: 'mpeg',
   yml: 'yaml', htm: 'html', markdown: 'md',
+  tgz: 'tar.gz', tbz2: 'tar.bz2', tbz: 'tar.bz2', txz: 'tar.xz', tzst: 'tar.zst', lha: 'lzh',
 };
 
 const KIND_NAME = {
@@ -90,6 +111,7 @@ const KIND_NAME = {
   anim: 'animation', video: 'video',
   data: 'structured data', table: 'table', subtitles: 'subtitles', code: 'code',
   text: 'plain text', unknown: 'a type dotimg does not know',
+  archive: 'archive', stream: 'compressed file', split: 'part of a split archive',
 };
 
 /* ---------- helpers ---------- */
@@ -106,6 +128,7 @@ function fmtBytes(n) {
 
 function extOf(file) {
   const name = (file.name || '').toLowerCase();
+  for (const ending of COMPOUND_EXT) if (name.endsWith('.' + ending)) return ending;
   return name.slice(name.lastIndexOf('.') + 1);
 }
 
@@ -115,6 +138,8 @@ function normalExt(file) {
 }
 
 function kindOf(file) {
+  // .7z.001, .z01, .r00: one piece of a set, useless without the rest
+  if (/\.(\d{3}|z\d{2}|r\d{2})$/i.test(file.name || '')) return 'split';
   const ext = extOf(file);
   if (EXT_KIND[ext]) return EXT_KIND[ext];
 
@@ -241,6 +266,12 @@ function buildFormatList(kind, same, rawExt, keepChoice) {
       'cannot be turned back into a drawing.';
   } else if (kind === 'unknown') {
     note.textContent = 'dotimg does not know this type of file, so there is nothing to convert it to.';
+  } else if (kind === 'split') {
+    note.textContent = 'this is one part of a split archive. the other parts are needed to open it, ' +
+      'and dotimg works on a single file.';
+  } else if (ARCHIVE_KINDS.has(kind)) {
+    note.textContent = 'archives are unpacked and packed again. nothing inside is changed, and ' +
+      'rar, iso and similar formats can be read but not written.';
   } else if (LOSSLESS.has(kind)) {
     note.textContent = 'this kind of file is lossless: nothing can be thrown away without ' +
       'changing it, so it has a floor on how small it gets.';
@@ -267,6 +298,14 @@ async function describe(item) {
   const cell = $('dExtra');
   if (item.kind === 'midi') {
     cell.textContent = 'a score, compressed by rewriting the notes themselves';
+    return;
+  }
+  if (ARCHIVE_KINDS.has(item.kind)) {
+    cell.textContent = 'contents are listed when compressing starts';
+    return;
+  }
+  if (item.kind === 'split') {
+    cell.textContent = 'one piece of a set, which cannot be opened on its own';
     return;
   }
   if (LOSSLESS.has(item.kind)) {
@@ -315,6 +354,10 @@ async function run() {
     setStatus('dotimg does not know this type of file, so there is nothing it can turn it into.');
     return;
   }
+  if (item.kind === 'split') {
+    setStatus('this is one part of a split archive. it cannot be opened without the other parts.');
+    return;
+  }
   if (!out) { setStatus('give the format list a moment to fill in, then try again.'); return; }
   busy = true;
   $('go').disabled = true;
@@ -351,6 +394,9 @@ async function attempt(item, out, target, started) {
   if (item.kind === 'unknown') {
     throw new Error('dotimg does not know this type of file.');
   }
+  if (item.kind === 'split') {
+    throw new Error('this is one part of a split archive, which cannot be opened without the other parts.');
+  }
 
   // converting with room to spare should still shrink the file, never grow it. the one
   // exception is changing the format of a lossless file: json written as yaml, or a table
@@ -366,6 +412,17 @@ async function attempt(item, out, target, started) {
   onProgress(p => {
     if (busy && p > 0 && p < 1) setStatus('working: ' + Math.round(p * 100) + '%');
   });
+
+  if (ARCHIVE_KINDS.has(item.kind)) {
+    // gzip and its relatives remember the name of the file they wrap, so the tar inside is
+    // named to match the download
+    // for a single compressed file, the file inside is named exactly as the download unpacks
+    const innerName = SINGLE_STREAM.has(out) ? downloadName(item, out).slice(0, -(out.length + 1)) : null;
+    const r = await compressArchive(item.file, budget, normalExt(item.file), out,
+      nameBase(item) + '.dotimg.us', report, innerName);
+    finish(item, r.blob, r.ext, started, r.detail);
+    return;
+  }
 
   if (LOSSLESS.has(item.kind) || (item.kind === 'image' && out === 'svg')) {
     const r = await compressText(item.file, budget, normalExt(item.file), out, report);
@@ -468,11 +525,30 @@ const MIME_EXT = {
 };
 
 /** what the result should be called: the original name, the site, the new extension. */
-function downloadName(item, ext) {
-  const base = (item.file.name || 'output')
-    .replace(/\.[^.]+$/, '')            // drop the old extension
+/** the original name with its extension and any earlier dotimg marker removed. */
+function nameBase(item) {
+  const name = item.file.name || 'output';
+  // a two-part ending comes off whole, otherwise one extension does. never both, or
+  // my.backup.tar.gz would lose its .backup
+  const compound = name.match(/\.tar\.(gz|bz2|xz|zst)$/i);
+  return (compound ? name.slice(0, compound.index) : name.replace(/\.[^.]+$/, ''))
     .replace(/\.dotimg(\.us)?$/i, '');   // and a marker left by an earlier pass
-  return base + '.dotimg.us.' + (OUTPUT_EXT[ext] || ext);
+}
+
+const SINGLE_STREAM = new Set(['gz', 'bz2', 'xz']);
+
+function downloadName(item, ext) {
+  // a single compressed file unpacks by dropping its last extension, so notes.md.bz2 must stay
+  // notes.<marker>.md.bz2: marking it notes.md.<marker>.bz2 would unpack as a file with no .md
+  if (item.kind === 'stream' && SINGLE_STREAM.has(ext)) {
+    const inner = nameBase(item);
+    const dot = inner.lastIndexOf('.');
+    if (dot > 0) {
+      const stem = inner.slice(0, dot).replace(/\.dotimg(\.us)?$/i, '');
+      return stem + '.dotimg.us.' + inner.slice(dot + 1) + '.' + ext;
+    }
+  }
+  return nameBase(item) + '.dotimg.us.' + (OUTPUT_EXT[ext] || ext);
 }
 
 function finish(item, blob, ext, started, detail) {

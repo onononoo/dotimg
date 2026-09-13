@@ -13,8 +13,8 @@
 
 <h1><img src="logo.png" width="25" height="25" alt=""> dotimg</h1>
 
-<p>compress one image, video, gif, song, midi, data, table, subtitle or code file down to a
-size you pick. everything happens in this browser. nothing is uploaded anywhere.</p>
+<p>compress one image, video, gif, song, midi, data, table, subtitle, code or archive file down
+to a size you pick. everything happens in this browser. nothing is uploaded anywhere.</p>
 
 <hr>
 
@@ -79,6 +79,10 @@ go first, then controllers, then musical detail, and it will never hand back a s
 they mean, so they have a floor. json, yaml, tables and subtitles are rewritten as compactly as
 their format allows, and can be converted into a close relative, such as json into yaml.
 javascript, css and html go through real minifiers, never simple whitespace stripping.</p>
+
+<p>archives are unpacked and packed again with 7-zip, at its strongest settings. nothing inside
+is changed: every file and folder comes back exactly as it was. rar, iso and similar
+formats can be opened but not written, and password protected archives are left alone.</p>
 
 <p>some things are not possible and the page will say so rather than fail quietly. heic needs
 apple's decoder and only works in safari. camera raw differs for every manufacturer. every format

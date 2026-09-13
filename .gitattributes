@@ -1,0 +1,2 @@
+# webassembly engines are binary: git must never touch their bytes
+*.wasm binary

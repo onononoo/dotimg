@@ -1,7 +1,7 @@
 # dotimg, runs completely in **your** browser.
 
-compress any image, video, gif, music, audio, data, table, subtitle or code file down to a file
-size you name, in the browser. nothing is uploaded: decoding and encoding happen on the machine that opens the page.
+compress any image, video, gif, music, audio, data, table, subtitle, code or archive file down
+to a file size you name, in the browser. nothing is uploaded: decoding and encoding happen on the machine that opens the page.
 
 ## running it locally
 
@@ -42,7 +42,9 @@ every extension below was generated as a real file and run through the pipeline.
 | subtitles | `.srt` `.vtt` | srt, vtt |
 | code | `.js` `.mjs` `.css` `.html` `.htm` `.xml` | its own format, minified |
 | plain text | `.txt` `.md` | its own format |
-| refused, with a reason | `.heic` `.raw`, and any type dotimg does not know | nothing |
+| archive | `.zip` `.7z` `.rar` `.tar` `.tar.gz` `.tgz` `.tar.bz2` `.tar.xz` `.tar.zst` `.iso` `.cab` `.arj` `.lzh` `.wim` `.dmg` | zip, 7z, tar, tar.gz, tar.bz2, tar.xz |
+| compressed file | `.gz` `.bz2` `.xz` `.zst` `.z` | gz, bz2, xz, zip, 7z |
+| refused, with a reason | `.heic` `.raw`, one part of a split archive, and any type dotimg does not know | nothing |
 
 svg can stay svg, minified, or be flattened into any of the picture formats. the reverse is not
 possible: a picture made of pixels cannot be rebuilt into a drawing.
@@ -88,6 +90,16 @@ are part of the text, and removes only indentation. only utf-8 text is rewritten
 else is refused, so nothing in another encoding is silently corrupted. converting to a close
 relative, such as tsv to csv, may legitimately come out a little larger, and that is allowed.
 
+**archives** are unpacked completely and packed again by 7-zip compiled to webassembly, running
+in a background worker so the page stays responsive: a 100 mb archive held up the page for at
+most 38 ms. nothing inside is changed. every file, folder, empty folder, unicode name and
+modification date was checked bit for bit, by sha-256, across every format in and out. zip is
+written with plain deflate rather than deflate64 or lzma, because windows explorer and macos
+cannot open those, and with utf-8 names so they read correctly everywhere. 7z is solid, so
+similar files share one dictionary. a `.tar.gz` is two layers, and both are opened. repacking
+into the same format never hands back something larger: if the original is already smaller
+than anything 7-zip can make, the original is what you get.
+
 **midi** is a score rather than a recording, so ffmpeg cannot read it and there is no codec to
 turn down. the file is parsed and rewritten: text and names first, then note-offs re-expressed
 as zero velocity note-ons so running status compresses the whole file, then aftertouch, pitch
@@ -119,6 +131,14 @@ never returns a silent file.
   better minified as html.
 - yaml comments are not kept, and converting webvtt to srt drops cue positioning and styling,
   since srt has neither. the page says so each time.
+- rar, iso, cab, dmg and similar formats can be opened but not written. rar is proprietary, and
+  7-zip's licence forbids using its rar code to create rar files.
+- password protected archives are refused, as is one part of a split archive, which cannot be
+  opened without the rest.
+- bz2 and xz store neither a file's name nor its date, only its contents, so a file inside one
+  takes its name from the archive's name, exactly as on a desktop. gz does store both.
+- archives up to 1 gb have been tested and work, at roughly five minutes per gigabyte for
+  incompressible data. beyond that, an archive may run out of the memory a browser tab allows.
 
 ## deploying it
 
@@ -148,6 +168,8 @@ build, because the loader beside it is that version and the two must match.
 | `midi-engine.js` | midi parser, rewriter and reduction ladder |
 | `text-engine.js` | data, table, subtitle, code and plain text rewriting |
 | `lib-loader.js` | loads each vendored library once, only when a file needs it |
+| `archive-engine.js` | hands archives to the worker, relays progress, applies the never-larger rule |
+| `archive-worker.js` | 7-zip in a background worker: unpack, check, repack |
 | `vendor/` | ffmpeg webassembly build; the 32 mb core is gitignored and falls back to a cdn |
 
 `vendor/` is a copy of `@ffmpeg/ffmpeg` 0.12.10 and `@ffmpeg/core` 0.12.6. the javascript is
@@ -167,6 +189,7 @@ all vendored in `vendor/`, pinned to exact versions, and loaded only when a file
 | csso | 5.0.5 | mit | css |
 | html-minifier-terser | 7.2.0 | mit | html |
 | svgo | 3.3.2 | mit | svg |
+| 7z-wasm (7-zip 24.09) | 1.2.0 | lgpl-2.1+ with the unrar restriction | archives |
 
 ## source and donations
 
