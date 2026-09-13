@@ -13,8 +13,8 @@
 
 <h1><img src="logo.png" width="25" height="25" alt=""> dotimg</h1>
 
-<p>compress one image, video, gif, song or midi file down to a size you pick.
-everything happens in this browser. nothing is uploaded anywhere.</p>
+<p>compress one image, video, gif, song, midi, data, table, subtitle or code file down to a
+size you pick. everything happens in this browser. nothing is uploaded anywhere.</p>
 
 <hr>
 
@@ -74,6 +74,11 @@ sound are given a bitrate worked out from how long they run, then re-encoded and
 the file fits. gifs are rebuilt with a new colour palette, dropping frame rate and colours as
 needed. a midi file holds notes rather than sound, so it is rewritten instead: names and lyrics
 go first, then controllers, then musical detail, and it will never hand back a silent file.</p>
+
+<p>text, code and data are different: nothing in them can be thrown away without changing what
+they mean, so they have a floor. json, yaml, tables and subtitles are rewritten as compactly as
+their format allows, and can be converted into a close relative, such as json into yaml.
+javascript, css and html go through real minifiers, never simple whitespace stripping.</p>
 
 <p>some things are not possible and the page will say so rather than fail quietly. heic needs
 apple's decoder and only works in safari. camera raw differs for every manufacturer. every format

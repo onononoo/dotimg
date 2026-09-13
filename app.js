@@ -2,6 +2,7 @@ import { compressImage, decodeImage, fitImageVia, supportsEncode } from './image
 import { compressVideo, compressGif, compressAudio, decodeStillViaFFmpeg, encodeStillViaFFmpeg,
          decodeAnimatedWebp, onProgress, engineLoaded, FFMPEG_STILL_FORMATS } from './media-engine.js';
 import { compressMidi } from './midi-engine.js';
+import { compressText } from './text-engine.js';
 
 const $ = id => document.getElementById(id);
 
@@ -29,6 +30,12 @@ const EXT_KIND = {
   avif: 'image', jxl: 'image',
   // animation, or a still pretending to be one
   gif: 'anim', webp: 'maybe-anim', apng: 'maybe-anim',
+  // text, code and data
+  json: 'data', yaml: 'data', yml: 'data',
+  csv: 'table', tsv: 'table',
+  srt: 'subtitles', vtt: 'subtitles',
+  js: 'code', mjs: 'code', css: 'code', html: 'code', htm: 'code', xml: 'code',
+  txt: 'text', md: 'text', markdown: 'text',
 };
 
 // still formats the canvas itself can write.
@@ -47,7 +54,15 @@ const FAMILY = {
   image: ['jpg', 'png', 'webp', 'avif', 'gif', 'bmp', 'tiff', 'ico'],
   anim: ['gif', 'mp4', 'webm', 'mkv', 'mov', 'avi'],
   video: ['mp4', 'webm', 'mkv', 'mov', 'avi'],
+  data: ['json', 'yaml'],
+  table: ['csv', 'tsv'],
+  subtitles: ['srt', 'vtt'],
+  code: [],
+  text: [],
 };
+
+// kinds where nothing can be thrown away, so there is a hard floor on size.
+const LOSSLESS = new Set(['data', 'table', 'subtitles', 'code', 'text']);
 
 const LABELS = {
   mp3: 'mp3', wav: 'wav', aac: 'aac', flac: 'flac (lossless)', ogg: 'ogg vorbis',
@@ -57,17 +72,24 @@ const LABELS = {
   gif: 'gif', bmp: 'bmp', tiff: 'tiff', ico: 'ico (icon, 256px max)',
   mp4: 'mp4 (h.264)', webm: 'webm (vp9)', mkv: 'mkv (h.264)', mov: 'mov (h.264)',
   avi: 'avi (mpeg-4)',
+  json: 'json', yaml: 'yaml', csv: 'csv', tsv: 'tsv (tab separated)',
+  srt: 'srt', vtt: 'vtt (webvtt)', js: 'js (minified)', mjs: 'mjs (minified)',
+  css: 'css (minified)', html: 'html (minified)', xml: 'xml (minified)',
+  txt: 'txt', md: 'md (markdown)', svg: 'svg (minified)',
 };
 
 // extensions that mean the same format under a different spelling.
 const SAME_AS = {
   jpeg: 'jpg', jfif: 'jpg', tif: 'tiff', midi: 'mid', rmi: 'mid',
   aif: 'aiff', aifc: 'aiff', m4v: 'mp4', oga: 'ogg', mpg: 'mpeg',
+  yml: 'yaml', htm: 'html', markdown: 'md',
 };
 
 const KIND_NAME = {
   audio: 'music or audio', midi: 'midi score', image: 'still picture',
   anim: 'animation', video: 'video',
+  data: 'structured data', table: 'table', subtitles: 'subtitles', code: 'code',
+  text: 'plain text', unknown: 'a type dotimg does not know',
 };
 
 /* ---------- helpers ---------- */
@@ -101,7 +123,8 @@ function kindOf(file) {
   if (type.startsWith('audio/')) return 'audio';
   if (type.startsWith('video/')) return 'video';
   if (type === 'image/gif') return 'anim';
-  return 'image';
+  if (type.startsWith('image/')) return 'image';
+  return 'unknown';
 }
 
 /** webp and png can be animated; sniff the bytes rather than trusting the extension. */
@@ -193,7 +216,11 @@ function buildFormatList(kind, same, rawExt, keepChoice) {
   const previous = sel.value;
   sel.innerHTML = '';
 
-  for (const key of FAMILY[kind] || FAMILY.image) {
+  let keys = FAMILY[kind] || [];
+  if (kind === 'code' || kind === 'text') keys = [same];
+  if (kind === 'image' && same === 'svg') keys = ['svg', ...keys]; // svg can stay vector
+
+  for (const key of keys) {
     if (key === 'avif' && !avifOK) continue; // this browser has no avif encoder
     const opt = document.createElement('option');
     opt.value = key;
@@ -210,8 +237,13 @@ function buildFormatList(kind, same, rawExt, keepChoice) {
     note.textContent = 'a midi file stores notes rather than sound, so it can only stay midi. ' +
       'turning it into mp3 would need a synthesiser.';
   } else if (rawExt === 'svg') {
-    note.textContent = 'svg can be read but not written back: a drawing cannot be rebuilt once ' +
-      'it has been flattened into pixels.';
+    note.textContent = 'svg can stay svg, or be flattened into pixels. a picture made of pixels ' +
+      'cannot be turned back into a drawing.';
+  } else if (kind === 'unknown') {
+    note.textContent = 'dotimg does not know this type of file, so there is nothing to convert it to.';
+  } else if (LOSSLESS.has(kind)) {
+    note.textContent = 'this kind of file is lossless: nothing can be thrown away without ' +
+      'changing it, so it has a floor on how small it gets.';
   } else if (kind === 'anim') {
     note.textContent = 'converting an animation to mp4 or webm is usually many times smaller ' +
       'than keeping it a gif.';
@@ -235,6 +267,16 @@ async function describe(item) {
   const cell = $('dExtra');
   if (item.kind === 'midi') {
     cell.textContent = 'a score, compressed by rewriting the notes themselves';
+    return;
+  }
+  if (LOSSLESS.has(item.kind)) {
+    const text = await item.file.text();
+    const lines = text ? text.split('\n').length : 0;
+    cell.textContent = lines + (lines === 1 ? ' line' : ' lines');
+    return;
+  }
+  if (item.kind === 'unknown') {
+    cell.textContent = 'not a type dotimg can open';
     return;
   }
   if (item.kind !== 'image' && item.kind !== 'anim') {
@@ -269,6 +311,10 @@ async function run() {
 
   const item = current;
   const out = $('outFormat').value;
+  if (item.kind === 'unknown') {
+    setStatus('dotimg does not know this type of file, so there is nothing it can turn it into.');
+    return;
+  }
   if (!out) { setStatus('give the format list a moment to fill in, then try again.'); return; }
   busy = true;
   $('go').disabled = true;
@@ -302,8 +348,16 @@ async function attempt(item, out, target, started) {
     return;
   }
 
-  // converting with room to spare should still shrink the file, never grow it.
-  const budget = Math.min(target, item.file.size);
+  if (item.kind === 'unknown') {
+    throw new Error('dotimg does not know this type of file.');
+  }
+
+  // converting with room to spare should still shrink the file, never grow it. the one
+  // exception is changing the format of a lossless file: json written as yaml, or a table
+  // written as tsv, can legitimately come out a little larger, and capping it at the
+  // original size would make those conversions fail every time. media keeps the cap.
+  const changingLossless = LOSSLESS.has(item.kind) && out !== normalExt(item.file);
+  const budget = changingLossless ? target : Math.min(target, item.file.size);
 
   const report = {
     state: s => setStatus('engine: ' + s),
@@ -312,6 +366,12 @@ async function attempt(item, out, target, started) {
   onProgress(p => {
     if (busy && p > 0 && p < 1) setStatus('working: ' + Math.round(p * 100) + '%');
   });
+
+  if (LOSSLESS.has(item.kind) || (item.kind === 'image' && out === 'svg')) {
+    const r = await compressText(item.file, budget, normalExt(item.file), out, report);
+    finish(item, r.blob, r.ext, started, r.detail);
+    return;
+  }
 
   if (item.kind === 'midi') {
     const r = await compressMidi(item.file, budget, report);

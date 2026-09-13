@@ -1,0 +1,6 @@
+js-yaml 4.1.0 (MIT) dist/js-yaml.mjs
+papaparse 5.4.1 (MIT) +esm build
+terser 5.31.6 (BSD-2-Clause) dist/bundle.min.js
+csso 5.0.5 (MIT) dist/csso.esm.js
+html-minifier-terser 7.2.0 (MIT) dist/htmlminifier.esm.bundle.js
+svgo 3.3.2 (MIT) dist/svgo.browser.js
