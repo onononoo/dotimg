@@ -91,7 +91,16 @@ page tells you the floor and offers the smallest file it managed.</p>
 
 <hr>
 
-<p><small>this project is open source, so please donate to keep it up :) ! btc: bc1qs4z04ltddh6vaqd4stu3p4vekv253ht4cwqma4</small></p>
+<p><small>this project is open source, so please donate to keep it up :) ! btc: <span id="btc">bc1qs4z04ltddh6vaqd4stu3p4vekv253ht4cwqma4</span> <button type="button" id="copy-btc" title="copy address" aria-label="copy bitcoin address" style="font-size:inherit;padding:0 .3em">⧉</button></small></p>
+<script>
+document.getElementById('copy-btc').addEventListener('click', function () {
+  var btn = this, addr = document.getElementById('btc');
+  function done() { btn.textContent = '✓'; setTimeout(function () { btn.textContent = '⧉'; }, 1500); }
+  function select() { var r = document.createRange(); r.selectNodeContents(addr); var s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+  if (navigator.clipboard) navigator.clipboard.writeText(addr.textContent).then(done, select);
+  else select();
+});
+</script>
 
 <p><small>source code: <a href="https://github.com/onononoo/dotimg">https://github.com/onononoo/dotimg</a></small></p>
 
