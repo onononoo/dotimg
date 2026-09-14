@@ -4,7 +4,9 @@ compress any image, video, gif, music, audio, data, table, subtitle, code or arc
 to a file size you name, in the browser. nothing is uploaded: decoding and encoding happen on the machine that opens the page.
 
 ## running it locally
-
+```bash
+git clone https://onononoo/dotimg.git
+```
 double click `start.bat`, or serve the folder any other way:
 
 ```bash
