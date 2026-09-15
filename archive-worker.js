@@ -115,6 +115,9 @@ const MIME = {
   gz: 'application/gzip', bz2: 'application/x-bzip2', xz: 'application/x-xz',
 };
 
+// how many names travel back to the page for the preview list.
+const NAME_SAMPLE = 100;
+
 /** a name 7-zip can write into its filesystem. slashes and the like would be read as folders. */
 const safeName = (name) => (name || 'archive').replace(/[\\/:*?"<>|\x00-\x1f]/g, '_');
 
@@ -221,6 +224,9 @@ async function repack({ buffer, from, to, base, name, lastModified, innerName },
     mime: MIME[to] || 'application/octet-stream',
     files: files.length,
     folders: folders.length,
+    // enough names for the page to show what is inside. an archive of a hundred thousand
+    // files must not post a hundred thousand strings back to fill a preview box.
+    names: files.slice(0, NAME_SAMPLE),
   };
 }
 

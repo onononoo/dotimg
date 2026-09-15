@@ -91,5 +91,5 @@ export async function compressArchive(file, targetBytes, from, to, base, report,
     err.smallest = { size: blob.size, blob };
     throw err;
   }
-  return { blob, ext: to, detail };
+  return { blob, ext: to, detail, names: result.names, files: result.files };
 }

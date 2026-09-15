@@ -201,7 +201,7 @@ async function pick(file, extraNote) {
   current = null;
   $('output').hidden = true;
   setStatus('');
-  $('result').textContent = '';
+  clearResult();
 
   let kind = kindOf(file);
   if (kind === 'maybe-anim') kind = (await isAnimated(file)) ? 'anim' : 'image';
@@ -361,7 +361,7 @@ async function run() {
   if (!out) { setStatus('give the format list a moment to fill in, then try again.'); return; }
   busy = true;
   $('go').disabled = true;
-  $('result').textContent = '';
+  clearResult();
   setStatus('working...');
   const started = performance.now();
 
@@ -420,7 +420,8 @@ async function attempt(item, out, target, started) {
     const innerName = SINGLE_STREAM.has(out) ? downloadName(item, out).slice(0, -(out.length + 1)) : null;
     const r = await compressArchive(item.file, budget, normalExt(item.file), out,
       nameBase(item) + '.dotimg.us', report, innerName);
-    finish(item, r.blob, r.ext, started, r.detail);
+    finish(item, r.blob, r.ext, started, r.detail,
+      r.names && { names: r.names, total: r.files });
     return;
   }
 
@@ -551,7 +552,126 @@ function downloadName(item, ext) {
   return nameBase(item) + '.dotimg.us.' + (OUTPUT_EXT[ext] || ext);
 }
 
-function finish(item, blob, ext, started, detail) {
+/* ---------- showing the result back ---------- */
+
+// how a finished file is shown, by the extension it was written as. a browser can still
+// refuse one of these (mkv and avi usually, wma and alac almost always, tiff outside
+// safari), so every preview has an error path and says so rather than leaving a broken box.
+const PREVIEW_KIND = {
+  jpg: 'image', png: 'image', webp: 'image', avif: 'image', gif: 'image', bmp: 'image',
+  tiff: 'image', ico: 'image', svg: 'image',
+  mp4: 'video', webm: 'video', mkv: 'video', mov: 'video', avi: 'video',
+  mp3: 'audio', wav: 'audio', aac: 'audio', flac: 'audio', ogg: 'audio', m4a: 'audio',
+  wma: 'audio', aiff: 'audio', opus: 'audio',
+  json: 'text', yaml: 'text', csv: 'text', tsv: 'text', srt: 'text', vtt: 'text',
+  js: 'text', mjs: 'text', css: 'text', html: 'text', xml: 'text', txt: 'text', md: 'text',
+  // a midi file carries notes rather than sound, so there is nothing to play back without a
+  // synthesiser. said here rather than left to the sniff below, which would see audio/midi
+  // and offer a player that could only fail.
+  mid: null,
+};
+
+// enough of a text file to see what happened to it without pasting a whole novel
+// into the page.
+const PREVIEW_CHARS = 2000;
+
+// object urls for whatever is on screen. the download link and the preview share one url
+// per file, and they are let go the moment a new result replaces them.
+let shownUrls = [];
+
+function resultUrl(blob) {
+  const url = URL.createObjectURL(blob);
+  shownUrls.push(url);
+  return url;
+}
+
+/** wipe the last result, preview and all, and hand its memory back. */
+function clearResult() {
+  for (const url of shownUrls) URL.revokeObjectURL(url);
+  shownUrls = [];
+  $('result').textContent = '';
+  $('preview').textContent = '';
+  $('preview').hidden = true;
+}
+
+function previewNote(text) {
+  const small = document.createElement('small');
+  small.textContent = text;
+  return small;
+}
+
+/**
+ * put the finished file back on the page: a picture to look at, a player to watch or hear
+ * it with, the opening lines of a text file, or the contents of an archive. anything with
+ * nothing to show, such as a midi score, is skipped rather than given an empty box.
+ */
+function showPreview(blob, ext, url, listing) {
+  const type = blob.type || '';
+  // the table has the last word on a format dotimg writes itself; the mime type is only a
+  // guess for a file that was left exactly as it came in.
+  const kind = ext in PREVIEW_KIND ? PREVIEW_KIND[ext] :
+    listing ? 'listing' :
+    type.startsWith('image/') ? 'image' :
+    type.startsWith('video/') ? 'video' :
+    type.startsWith('audio/') ? 'audio' : null;
+  if (!kind) return;
+
+  const box = $('preview');
+  box.hidden = false;
+
+  // an archive has nothing to look at or play, so it shows what came out of it instead.
+  if (kind === 'listing') {
+    const shown = listing.names.length;
+    const pre = document.createElement('pre');
+    pre.textContent = listing.names.join('\n') +
+      (listing.total > shown ? '\n... and ' + (listing.total - shown) + ' more' : '');
+    box.append(previewNote('inside the new archive:'), pre);
+    return;
+  }
+
+  if (kind === 'text') {
+    const label = previewNote('preview:');
+    const pre = document.createElement('pre');
+    pre.textContent = 'reading...';
+    box.append(label, pre);
+    blob.text().then(text => {
+      // a slow read can land after the next file has already replaced this one
+      if (!pre.isConnected) return;
+      const cut = text.length > PREVIEW_CHARS;
+      pre.textContent = cut ? text.slice(0, PREVIEW_CHARS) + '\n...' : text;
+      if (cut) label.textContent = 'preview (first ' + PREVIEW_CHARS + ' characters):';
+    }, () => {
+      if (pre.isConnected) pre.textContent = 'this file cannot be shown as text.';
+    });
+    return;
+  }
+
+  const el = document.createElement(kind === 'image' ? 'img' : kind);
+  el.src = url;
+  if (kind === 'image') {
+    el.alt = 'the compressed picture';
+    el.style.maxWidth = '100%';
+    el.style.height = 'auto';
+  } else {
+    el.controls = true;
+    el.preload = 'metadata';
+    if (kind === 'video') el.style.maxWidth = '100%';
+  }
+
+  // the file itself is fine either way: only this browser's playback is missing, so say
+  // that instead of implying the compression failed.
+  el.addEventListener('error', () => {
+    box.textContent = '';
+    box.append(previewNote(kind === 'image'
+      ? 'no preview: this browser cannot display ' + ext + '. the file above is still good.'
+      : 'no preview: this browser cannot play ' + ext + '. the file above is still good, so ' +
+        'download it and open it in a player.'));
+  });
+
+  box.append(previewNote('preview:'), document.createElement('br'), el);
+}
+
+function finish(item, blob, ext, started, detail, listing) {
   const secs = ((performance.now() - started) / 1000).toFixed(1);
   const pct = item.file.size ? Math.round((1 - blob.size / item.file.size) * 100) : 0;
   const change = blob === item.file ? 'left unchanged'
@@ -561,35 +681,43 @@ function finish(item, blob, ext, started, detail) {
 
   setStatus('done in ' + secs + ' seconds.');
 
+  clearResult();
+
   const name = downloadName(item, ext);
+  const url = resultUrl(blob);
   const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
+  link.href = url;
   link.download = name;
   link.textContent = 'download ' + name;
 
   const size = document.createElement('b');
   size.textContent = fmtBytes(blob.size);
 
-  $('result').textContent = '';
   $('result').append(size, ' (' + change + '), ' + detail + '.',
     document.createElement('br'), link);
+
+  showPreview(blob, ext, url, listing);
 }
 
 function failed(err, item, out) {
   setStatus('could not do it: ' + (err.message || String(err)));
-  $('result').textContent = '';
+  clearResult();
 
   const closest = err.smallest;
   if (!closest?.blob) return;
 
   // this is still a real file, so it gets a real name: saving it as an extensionless
   // "smallest-possible" left it unopenable
-  const name = downloadName(item, MIME_EXT[closest.blob.type] || out);
+  const ext = MIME_EXT[closest.blob.type] || out;
+  const name = downloadName(item, ext);
+  const url = resultUrl(closest.blob);
   const link = document.createElement('a');
-  link.href = URL.createObjectURL(closest.blob);
+  link.href = url;
   link.download = name;
   link.textContent = 'download that instead';
   $('result').append('the smallest this could get is ' + fmtBytes(closest.size) + '. ', link);
+
+  showPreview(closest.blob, ext, url);
 }
 
 /* ---------- wiring ---------- */

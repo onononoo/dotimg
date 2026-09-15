@@ -28,6 +28,13 @@ a file into its own format never makes it larger. the one exception is convertin
 file into a close relative, such as tsv into csv, which can legitimately come out a little
 larger; there only your target applies.
 
+the finished file is shown on the page next to its download link, so nothing has to be saved to
+find out what it looks like: a picture is displayed, a video or a song gets a player, text, data,
+tables and subtitles show their first 2000 characters, and an archive lists what is inside it. a
+midi score has nothing to show without a synthesiser, and a format the browser cannot open itself,
+such as wma or an mkv, says so plainly instead of leaving a broken box; the file is still fine and
+the download is unaffected.
+
 ## supported formats
 
 every extension below was generated as a real file and run through the pipeline.
