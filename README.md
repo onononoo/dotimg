@@ -1,4 +1,4 @@
-# dotimg, runs completely in **your** browser.
+# dotimg, runs completely in **YOUR** browser.
 
 compress any image, video, gif, music, audio, data, table, subtitle, code or archive file down
 to a file size you name, in the browser. nothing is uploaded: decoding and encoding happen on the machine that opens the page.
