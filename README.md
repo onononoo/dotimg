@@ -199,3 +199,6 @@ source code: https://github.com/onononoo/dotimg
 
 this project is open source, so please donate to keep it up :) ! btc: bc1qs4z04ltddh6vaqd4stu3p4vekv253ht4cwqma4
 cicada 3301
+
+
+## **thank you claude for fixing the bug with ffmpeg-core.wasm**
