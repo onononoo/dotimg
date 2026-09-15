@@ -62,6 +62,7 @@ to a size you pick. everything happens in this browser. nothing is uploaded anyw
   <hr>
   <p id="status"></p>
   <p id="result"></p>
+  <div id="preview" hidden></div>
 </div>
 
 <hr>
@@ -83,6 +84,12 @@ javascript, css and html go through real minifiers, never simple whitespace stri
 <p>archives are unpacked and packed again with 7-zip, at its strongest settings. nothing inside
 is changed: every file and folder comes back exactly as it was. rar, iso and similar
 formats can be opened but not written, and password protected archives are left alone.</p>
+
+<p>whatever comes out is shown on the page as well as offered as a download: a picture or gif
+appears, a video or song gets a player, and text, data and subtitles show their opening lines.
+that preview is the finished file itself, read back out of your own browser, so nothing is
+uploaded to display it. a format your browser has no decoder for, such as avi or wma, says so
+rather than leaving a broken box.</p>
 
 <p>some things are not possible and the page will say so rather than fail quietly. heic needs
 apple's decoder and only works in safari. camera raw differs for every manufacturer. every format

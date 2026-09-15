@@ -23,6 +23,12 @@ it is and offers only the formats that belong to the same family, so music conve
 video to video, and a picture to a picture. type a target size, pick a unit from bytes to
 gigabytes, and press compress.
 
+when it finishes, the result is previewed on the page as well as offered as a download. a picture
+or gif is shown, a video or song gets a player, and text, data and subtitles show their opening
+lines. the preview is the finished file itself, read back out of the browser, so nothing is
+uploaded to display it; a format the browser has no decoder for, such as avi or wma, says so
+instead. archives and midi have nothing to look at, so they get no preview.
+
 the target is a ceiling, not a goal. a file already under it is left untouched, and compressing
 a file into its own format never makes it larger. the one exception is converting a lossless
 file into a close relative, such as tsv into csv, which can legitimately come out a little

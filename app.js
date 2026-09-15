@@ -194,6 +194,110 @@ function undecodableReason(file) {
 
 function setStatus(text) { $('status').textContent = text; }
 
+/* ---------- showing the result ---------- */
+
+// object urls handed to the page. the download link and its preview share one, and it is
+// released only when the next result replaces it: revoking any earlier would break a
+// download still sitting on screen.
+let liveUrls = [];
+
+function objectUrl(blob) {
+  const url = URL.createObjectURL(blob);
+  liveUrls.push(url);
+  return url;
+}
+
+/** wipe the last result, its preview and the urls both were holding. */
+function resetOutput() {
+  $('result').textContent = '';
+  const box = $('preview');
+  box.textContent = '';
+  box.hidden = true;
+  for (const url of liveUrls) URL.revokeObjectURL(url);
+  liveUrls = [];
+}
+
+// what a finished file is shown as. the blob's own mime type decides, since every engine
+// sets one honestly; the extension is only a fallback for a blob that arrived without.
+const PREVIEW_IMAGE = new Set(['jpg', 'png', 'webp', 'avif', 'gif', 'bmp', 'tiff', 'ico', 'svg', 'apng']);
+const PREVIEW_VIDEO = new Set(['mp4', 'webm', 'mkv', 'mov', 'avi', 'm4v', 'ogv']);
+const PREVIEW_AUDIO = new Set(['mp3', 'wav', 'aac', 'flac', 'ogg', 'm4a', 'wma', 'alac', 'aiff', 'opus']);
+const PREVIEW_TEXT = new Set(['json', 'yaml', 'csv', 'tsv', 'srt', 'vtt', 'js', 'mjs', 'css',
+                              'html', 'xml', 'txt', 'md']);
+
+// enough of a text file to see what came out, without pouring a huge one into the page.
+const PREVIEW_TEXT_BYTES = 20000;
+
+function previewKind(blob, ext) {
+  const type = blob.type || '';
+  // a midi file is a score, not sound: no browser plays one without a synthesiser.
+  if (type === 'audio/midi' || type === 'audio/x-midi' || ext === 'mid') return null;
+  if (type.startsWith('image/') || PREVIEW_IMAGE.has(ext)) return 'image';
+  if (type.startsWith('video/') || PREVIEW_VIDEO.has(ext)) return 'video';
+  if (type.startsWith('audio/') || PREVIEW_AUDIO.has(ext)) return 'audio';
+  if (type.startsWith('text/') || type === 'application/json' || type === 'application/yaml' ||
+      type === 'application/xml' || PREVIEW_TEXT.has(ext)) return 'text';
+  return null;  // archives, midi and anything else with nothing to look at
+}
+
+/** show the finished file itself, read back from the blob the download link points at. */
+function showPreview(blob, url, ext) {
+  const kind = previewKind(blob, ext);
+  if (!kind) return;
+
+  const box = $('preview');
+  const head = document.createElement('p');
+  const title = document.createElement('b');
+  title.textContent = 'preview';
+  head.append(title, ' — this is the compressed file itself, read from your own browser.');
+  box.append(head);
+  box.hidden = false;
+
+  if (kind === 'text') {
+    const pre = document.createElement('pre');
+    pre.style.whiteSpace = 'pre-wrap';
+    pre.style.wordBreak = 'break-word';
+    pre.style.maxHeight = '20em';
+    pre.style.overflow = 'auto';
+    pre.textContent = 'reading...';
+    box.append(pre);
+    blob.slice(0, PREVIEW_TEXT_BYTES).text().then(
+      text => { pre.textContent = blob.size > PREVIEW_TEXT_BYTES ? text + '\n...' : text; },
+      () => { pre.textContent = 'this file could not be read back for a preview.'; });
+    return;
+  }
+
+  const el = document.createElement(kind === 'image' ? 'img' : kind);
+  el.src = url;
+  if (kind === 'image') {
+    el.alt = 'the compressed picture';
+  } else {
+    el.controls = true;
+    el.preload = 'metadata';
+  }
+  if (kind !== 'audio') {
+    el.style.maxWidth = '100%';
+    el.style.height = 'auto';
+  }
+
+  // a container this browser has no decoder for (mkv, avi, wma and friends) fails here
+  // rather than anywhere else, and the file is still perfectly good: say so plainly
+  // instead of leaving a broken box on the page.
+  el.addEventListener('error', () => {
+    if (!el.isConnected) return;
+    el.remove();
+    const verb = kind === 'image' ? 'show' : 'play';
+    const note = document.createElement('p');
+    const small = document.createElement('small');
+    small.textContent = 'this browser cannot ' + verb + ' ' + (ext ? '.' + ext : 'this format') +
+      ' itself, so there is nothing to preview. the download above is a working file.';
+    note.append(small);
+    box.append(note);
+  });
+
+  box.append(el);
+}
+
 /* ---------- picking a file ---------- */
 
 async function pick(file, extraNote) {
@@ -201,7 +305,7 @@ async function pick(file, extraNote) {
   current = null;
   $('output').hidden = true;
   setStatus('');
-  $('result').textContent = '';
+  resetOutput();
 
   let kind = kindOf(file);
   if (kind === 'maybe-anim') kind = (await isAnimated(file)) ? 'anim' : 'image';
@@ -361,7 +465,7 @@ async function run() {
   if (!out) { setStatus('give the format list a moment to fill in, then try again.'); return; }
   busy = true;
   $('go').disabled = true;
-  $('result').textContent = '';
+  resetOutput();
   setStatus('working...');
   const started = performance.now();
 
@@ -561,35 +665,42 @@ function finish(item, blob, ext, started, detail) {
 
   setStatus('done in ' + secs + ' seconds.');
 
+  resetOutput();   // clears any older result first, so the new url is the one kept
   const name = downloadName(item, ext);
+  const url = objectUrl(blob);
   const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
+  link.href = url;
   link.download = name;
   link.textContent = 'download ' + name;
 
   const size = document.createElement('b');
   size.textContent = fmtBytes(blob.size);
 
-  $('result').textContent = '';
   $('result').append(size, ' (' + change + '), ' + detail + '.',
     document.createElement('br'), link);
+
+  showPreview(blob, url, OUTPUT_EXT[ext] || ext);
 }
 
 function failed(err, item, out) {
   setStatus('could not do it: ' + (err.message || String(err)));
-  $('result').textContent = '';
+  resetOutput();
 
   const closest = err.smallest;
   if (!closest?.blob) return;
 
   // this is still a real file, so it gets a real name: saving it as an extensionless
   // "smallest-possible" left it unopenable
-  const name = downloadName(item, MIME_EXT[closest.blob.type] || out);
+  const ext = MIME_EXT[closest.blob.type] || out;
+  const name = downloadName(item, ext);
+  const url = objectUrl(closest.blob);
   const link = document.createElement('a');
-  link.href = URL.createObjectURL(closest.blob);
+  link.href = url;
   link.download = name;
   link.textContent = 'download that instead';
   $('result').append('the smallest this could get is ' + fmtBytes(closest.size) + '. ', link);
+
+  showPreview(closest.blob, url, OUTPUT_EXT[ext] || ext);
 }
 
 /* ---------- wiring ---------- */
